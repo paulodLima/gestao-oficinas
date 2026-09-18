@@ -1,0 +1,67 @@
+name: gestao-oficinas
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: oficinas-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-oficinas}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - oficinas-network
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../oficinas-api
+      dockerfile: Dockerfile
+    container_name: oficinas-api
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-oficinas}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      SERVER_PORT: 8080
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - oficinas-network
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ../oficinas-app
+      dockerfile: Dockerfile
+    container_name: oficinas-app
+    environment:
+      PORT: 4000
+      API_URL: http://api:8080
+    ports:
+      - "${APP_PORT:-4200}:4000"
+    depends_on:
+      - api
+    networks:
+      - oficinas-network
+    restart: unless-stopped
+
+networks:
+  oficinas-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+

@@ -1,0 +1,13 @@
+package br.com.gestao.oficinas_api;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class OficinasApiApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(OficinasApiApplication.class, args);
+	}
+
+}
