@@ -71,7 +71,7 @@ docker compose -f docker/docker-compose.yml up --build -d
 | --- | --- |
 | Frontend | http://localhost:4200 |
 | API | http://localhost:8080 |
-| Swagger UI | http://localhost:8080/swagger-ui.html |
+| E-mails de desenvolvimento (Mailpit) | http://localhost:8025 |
 | PostgreSQL | `localhost:5432` |
 
 Credenciais padrão do banco:
@@ -83,6 +83,14 @@ Senha: postgres
 ```
 
 Esses valores podem ser alterados no arquivo `docker/.env`.
+
+### Cadastro e acesso do proprietário
+
+Abra o frontend e clique em **Criar uma conta**. Informe seu nome, nome da oficina, e-mail e senha (mínimo de 12 caracteres, máximo de 72 bytes). Depois entre com o e-mail e a senha cadastrados. Não há usuário ou senha inicial da aplicação.
+
+Em **Esqueci minha senha**, solicite a recuperação e abra o e-mail no Mailpit. O link dura 30 minutos, funciona uma única vez e a troca de senha encerra as sessões anteriores. O Mailpit apenas captura e-mails locais; não envia mensagens reais.
+
+Migrações do banco são aplicadas pelo Flyway. Swagger está desativado. A área autenticada atual confirma a identidade da oficina; clientes, veículos e serviços serão implementados nas próximas tarefas.
 
 ## Comandos úteis do Docker
 
@@ -129,10 +137,10 @@ Também é possível executar o banco pelo Docker e iniciar backend e frontend d
 - Node.js 20 ou superior
 - npm
 
-### 1. Inicie somente o PostgreSQL
+### 1. Inicie o PostgreSQL e o e-mail local
 
 ```powershell
-docker compose -f docker/docker-compose.yml up -d postgres
+docker compose -f docker/docker-compose.yml up -d postgres mailpit
 ```
 
 ### 2. Inicie o backend
@@ -143,7 +151,7 @@ Abra outro terminal PowerShell:
 $env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/oficinas"
 $env:SPRING_DATASOURCE_USERNAME = "postgres"
 $env:SPRING_DATASOURCE_PASSWORD = "postgres"
-$env:SPRING_JPA_HIBERNATE_DDL_AUTO = "update"
+$env:MAIL_FROM = "oficinas@local.test"
 cd oficinas-api
 ./mvnw.cmd spring-boot:run
 ```
@@ -159,6 +167,32 @@ npm start
 ```
 
 O frontend ficará disponível em `http://localhost:4200` e a API em `http://localhost:8080`.
+
+Antes de executar API/app diretamente, pare as respectivas instâncias Docker para liberar as portas: `docker compose -f docker/docker-compose.yml stop api app`.
+
+## Testes
+
+Na pasta `oficinas-api`, execute `mvn test` (Docker deve estar disponível para o PostgreSQL temporário do Testcontainers).
+
+Na pasta `oficinas-app`:
+
+```powershell
+npm ci
+npm test -- --watch=false --browsers=ChromeHeadless
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Os testes Angular usam Chrome instalado; se necessário, configure `CHROME_BIN` com o caminho de um Chromium headless. Os E2E exigem o Compose rodando nas portas padrão (4200/8025), criam contas sintéticas `@example.test` e deixam mensagens no Mailpit. Capturas ficam em `oficinas-app/test-results`, ignoradas pelo Git.
+
+## Antes de publicar em produção
+
+O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banco privado com credenciais próprias e SMTP externo configurado (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `PUBLIC_URL`). O perfil exige cookie Secure e URL pública HTTPS. SMTP externo e domínio remetente ainda não foram validados.
+
+O proxy Express sobrescreve o IP encaminhado; a API só o aceita do host definido em `APP_AUTH_TRUSTED_PROXY_HOST` (`app` no Compose). Se houver outro balanceador, configure a cadeia confiável antes de publicar; não habilite confiança irrestrita em cabeçalhos. Não exponha banco nem Mailpit publicamente.
+
+Há alertas de segurança nas dependências existentes do Angular 19. Atualização de versão principal e validação correspondente são pendências antes de produção, fora da tarefa 2. Consulte [a validação](docs/task-2-validacao.md).
 
 ## Comunicação entre os serviços
 
@@ -199,4 +233,3 @@ docker compose -f docker/docker-compose.yml up --build
 docker compose -f docker/docker-compose.yml down -v
 docker compose -f docker/docker-compose.yml up --build
 ```
-

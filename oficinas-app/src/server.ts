@@ -7,12 +7,36 @@ import {
 import express from 'express';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
+const apiTarget = new URL(process.env['API_URL'] || 'http://localhost:8080');
+if (!['http:', 'https:'].includes(apiTarget.protocol)) throw new Error('API_URL inválida');
+app.use('/api', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const send = apiTarget.protocol === 'https:' ? httpsRequest : httpRequest;
+  const upstream = send({
+    hostname: apiTarget.hostname, port: apiTarget.port, protocol: apiTarget.protocol,
+    method: req.method, path: req.originalUrl,
+    headers: { ...req.headers, host: apiTarget.host,
+      'x-oficinas-client-ip': req.socket.remoteAddress || 'unknown' }, timeout: 15000
+  }, response => {
+    res.writeHead(response.statusCode || 502, response.headers);
+    response.pipe(res);
+  });
+  upstream.on('timeout', () => upstream.destroy(new Error('Timeout')));
+  upstream.on('error', () => {
+    if (!res.headersSent) res.status(502).json({ detail: 'Serviço indisponível. Tente novamente.' });
+    else res.destroy();
+  });
+  req.on('aborted', () => upstream.destroy());
+  req.pipe(upstream);
+});
 
 /**
  * Example Express Rest API endpoints can be defined here.

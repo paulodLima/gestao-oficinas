@@ -1,3 +1,41 @@
 spring:
   application:
     name: oficinas-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/oficinas}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  session:
+    timeout: 30m
+    jdbc:
+      initialize-schema: never
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_TLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+server:
+  servlet:
+    session:
+      timeout: 30m
+app:
+  auth:
+    public-url: ${PUBLIC_URL:http://localhost:4200}
+    secure-cookie: ${SECURE_COOKIE:false}
+  mail:
+    from: ${MAIL_FROM:}
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

@@ -31,13 +31,19 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-oficinas}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_FROM: oficinas@local.test
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:4200}
       SERVER_PORT: 8080
+      APP_AUTH_TRUSTED_PROXY_HOST: app
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     networks:
       - oficinas-network
     restart: unless-stopped
@@ -58,10 +64,18 @@ services:
       - oficinas-network
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    networks:
+      - oficinas-network
+    restart: unless-stopped
+
 networks:
   oficinas-network:
     driver: bridge
 
 volumes:
   postgres-data:
-

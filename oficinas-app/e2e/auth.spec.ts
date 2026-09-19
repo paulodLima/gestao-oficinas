@@ -1,0 +1,58 @@
+import { test, expect } from '@playwright/test';
+interface MailSummary { ID: string; To: { Address: string }[]; }
+
+test('cadastro, login, recuperação SMTP, troca de senha e logout', async ({ page, request }, info) => {
+  const email = `e2e-${Date.now()}-${info.project.name}@example.test`;
+  const password = 'Oficina-segura-123';
+  await page.goto('/inicio');
+  await expect(page).toHaveURL(/\/entrar$/);
+  await page.getByRole('link', { name: 'Criar uma conta' }).click();
+  await page.getByLabel('Seu nome', { exact: true }).fill('Proprietário Teste');
+  await page.getByLabel('Nome da oficina').fill('Oficina de teste');
+  await page.getByLabel('E-mail', { exact: true }).fill(email);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByLabel('Confirmar senha').fill(password);
+  await page.getByRole('button', { name: 'Criar minha conta' }).click();
+  await expect(page.getByRole('status')).toBeVisible();
+  await page.getByRole('link', { name: /Ir para o login/ }).click();
+  await page.getByLabel('E-mail', { exact: true }).fill(email);
+  await page.getByLabel('Senha', { exact: true }).fill('senha-errada-123');
+  await page.getByRole('button', { name: 'Entrar na oficina' }).click();
+  await expect(page.getByRole('alert')).toContainText('inválidos');
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Entrar na oficina' }).click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Oficina de teste' })).toBeVisible();
+  const cookies = await page.context().cookies();
+  expect(cookies.find(c => c.name === 'OFICINAS_SESSION')).toMatchObject({ httpOnly: true, sameSite: 'Lax' });
+  const recovery = await page.context().newPage();
+  await recovery.goto('/recuperar-senha');
+  await recovery.getByLabel('E-mail', { exact: true }).fill(email);
+  await recovery.getByRole('button', { name: 'Enviar link de recuperação' }).click();
+  await expect(recovery.getByRole('status')).toBeVisible();
+  const messages = await (await request.get('http://localhost:8025/api/v1/messages')).json();
+  const message = messages.messages.find((m: MailSummary) => m.To.some(to => to.Address === email));
+  expect(message).toBeTruthy();
+  const mail = await (await request.get(`http://localhost:8025/api/v1/message/${message.ID}`)).json();
+  const link = mail.Text.match(/http:\/\/localhost:4200\/redefinir-senha#token=[A-Za-z0-9_-]+/)[0];
+  await recovery.goto(link);
+  await expect(recovery).toHaveURL(/\/redefinir-senha$/);
+  await recovery.getByLabel('Nova senha', { exact: true }).fill('Nova-senha-segura-456');
+  await recovery.getByLabel('Confirmar senha').fill('Nova-senha-segura-456');
+  await recovery.getByRole('button', { name: 'Salvar nova senha' }).click();
+  await expect(recovery.getByRole('status')).toBeVisible();
+  // An open tab must allow logout even after another tab revoked its session.
+  await page.getByRole('button', { name: 'Sair da conta' }).click();
+  await expect(page).toHaveURL(/\/entrar$/);
+  await page.getByLabel('E-mail', { exact: true }).fill(email);
+  await page.getByLabel('Senha', { exact: true }).fill('Nova-senha-segura-456');
+  await page.getByRole('button', { name: 'Entrar na oficina' }).click();
+  await expect(page).toHaveURL(/\/inicio$/);
+  await page.getByRole('button', { name: 'Sair da conta' }).click();
+  await expect(page).toHaveURL(/\/entrar$/);
+  await page.goto('/inicio');
+  await expect(page).toHaveURL(/\/entrar$/);
+  await page.screenshot({ path: `test-results/login-${info.project.name}.png`, fullPage: true, animations: 'disabled' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+});
