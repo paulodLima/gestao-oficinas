@@ -1,0 +1,75 @@
+<header class="topbar">
+  <a routerLink="/inicio" class="brand">/ gestão oficinas</a>
+  <nav aria-label="Navegação da oficina"><a routerLink="/clientes-veiculos">Clientes e veículos</a><a routerLink="/inicio">Início</a></nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div><p class="eyebrow">OPERAÇÃO / ORDENS DE SERVIÇO</p><h1>Da entrada ao diagnóstico,<br>sem perder o contexto.</h1>
+      <p class="intro">Abra o atendimento com o responsável correto e encontre cada OS por número, cliente ou placa.</p></div>
+    <div class="summary" aria-label="Resumo das ordens"><span><strong>{{ orders().length }}</strong> na busca</span><span><strong>{{ activeCount() }}</strong> ativas</span></div>
+  </section>
+
+  @if (error()) { <p role="alert" class="notice error">{{ error() }}</p> }
+  @if (success()) { <p role="status" class="notice success">{{ success() }}</p> }
+  @if (loading()) { <p role="status" class="loading">Carregando ordens de serviço…</p> }
+
+  @if (!loading()) {
+    <section class="workspace" aria-label="Ordens de serviço">
+      <div class="directory">
+        <div class="section-heading"><div><p class="step">01 / LOCALIZAR</p><h2>Atendimentos</h2></div>
+          <button type="button" class="secondary" (click)="newOrder()">Nova ordem</button></div>
+        <form class="search" (submit)="$event.preventDefault(); searchOrders()">
+          <label for="order-search">Buscar por OS, cliente ou placa</label>
+          <div><input id="order-search" [formControl]="search" maxlength="100" autocomplete="off" placeholder="OS-12, Ana ou BRA-1E23">
+            <button type="submit" [disabled]="busy()">Buscar</button></div>
+        </form>
+        @if (!orders().length) { <div class="empty"><h3>Nenhuma ordem encontrada.</h3><p>Abra o primeiro atendimento ou ajuste a busca.</p></div> }
+        <div class="cards">
+          @for (order of orders(); track order.id) {
+            <button type="button" class="record" [class.selected]="selected()?.id === order.id" (click)="selectOrder(order)">
+              <span class="order-number">{{ formatNumber(order.numero) }}</span>
+              <span><strong>{{ order.veiculo }}</strong><small>{{ formatPlate(order.placa) }} · {{ order.clienteNome }}</small>
+                <small>Entrada {{ formatDate(order.entradaEm) }}</small></span>
+              <span class="badge">{{ statusLabel(order.status) }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <aside class="editor">
+        @if (selected(); as order) {
+          <p class="step">02 / DETALHE</p><div class="detail-heading"><h2>{{ formatNumber(order.numero) }}</h2><span class="status">{{ statusLabel(order.status) }}</span></div>
+          <div class="vehicle"><span class="plate">{{ formatPlate(order.placa) }}</span><div><strong>{{ order.veiculo }}</strong><small>{{ order.clienteNome }}</small></div></div>
+          <dl><div><dt>Entrada</dt><dd>{{ formatDate(order.entradaEm) }}</dd></div><div><dt>Quilometragem</dt><dd>{{ order.kmEntrada.toLocaleString('pt-BR') }} km</dd></div>
+            <div><dt>Previsão inicial</dt><dd>{{ formatDate(order.previsaoEm) }}</dd></div></dl>
+          <h3>Relato de entrada</h3><p class="report">{{ order.relatoInicial }}</p>
+          <button type="button" class="secondary full" (click)="newOrder()">Abrir outra ordem</button>
+        } @else {
+          <p class="step">02 / ABRIR</p><h2>Nova ordem de serviço</h2>
+          @if (!customers().length || !vehicles().length) { <p class="notice warning">Cadastre um cliente e um veículo antes de abrir o atendimento.</p> }
+          <form [formGroup]="form" (ngSubmit)="createOrder()">
+            <fieldset [disabled]="busy() || !customers().length || !vehicles().length">
+              <label for="order-customer">Cliente responsável *</label>
+              <select id="order-customer" formControlName="clienteId" (change)="syncVehicle()"><option value="">Selecione</option>
+                @for (customer of customers(); track customer.id) { <option [value]="customer.id">{{ customer.nome }}</option> }
+              </select>
+              <label for="order-vehicle">Veículo *</label>
+              <select id="order-vehicle" formControlName="veiculoId"><option value="">Selecione</option>
+                @for (vehicle of availableVehicles(); track vehicle.id) { <option [value]="vehicle.id">{{ formatPlate(vehicle.placa) }} · {{ vehicle.marca }} {{ vehicle.modelo }}</option> }
+              </select>
+              <label for="order-report">Relato inicial *</label>
+              <textarea id="order-report" formControlName="relatoInicial" rows="5" maxlength="2000" placeholder="Descreva o motivo da entrada e os sintomas relatados."></textarea>
+              @if (form.controls.relatoInicial.touched && form.controls.relatoInicial.invalid) { <small class="field-error">Informe ao menos 10 caracteres.</small> }
+              <div class="pair"><div><label for="order-entry">Data e hora de entrada *</label><input id="order-entry" type="datetime-local" formControlName="entradaEm"></div>
+                <div><label for="order-mileage">Quilometragem *</label><input id="order-mileage" inputmode="numeric" formControlName="kmEntrada" maxlength="7" placeholder="48210"></div></div>
+              <label for="order-forecast">Previsão inicial</label><input id="order-forecast" type="datetime-local" formControlName="previsaoEm">
+              <p class="hint">A previsão é uma estimativa e poderá ser atualizada com motivo nas próximas etapas.</p>
+              <button type="submit" class="primary">{{ busy() ? 'Abrindo…' : 'Abrir ordem de serviço' }}</button>
+            </fieldset>
+          </form>
+        }
+      </aside>
+    </section>
+  }
+</main>

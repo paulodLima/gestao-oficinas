@@ -132,6 +132,12 @@ public class CustomerVehicleRepository {
         int locked = jdbc.update("UPDATE veiculo SET versao=versao+1,updated_at=now() WHERE oficina_id=? AND id=? AND versao=?",
             shopId, id, expectedVersion);
         if (locked != 1) throw stale();
+        Integer activeOrders = jdbc.queryForObject(
+            "SELECT count(*) FROM ordem_servico WHERE oficina_id=? AND veiculo_id=? AND encerrada_em IS NULL",
+            Integer.class, shopId, id);
+        if (activeOrders != null && activeOrders > 0) {
+            throw new ApiException(409, "OS_ATIVA_EXISTENTE", "Encerre ou cancele o atendimento antes de transferir o veículo.");
+        }
         int closed = jdbc.update("UPDATE vinculo_cliente_veiculo SET fim_em=now() WHERE oficina_id=? AND veiculo_id=? AND fim_em IS NULL",
             shopId, id);
         if (closed != 1) throw new ApiException(409, "VINCULO_DESATUALIZADO", "O responsável mudou. Recarregue os dados.");

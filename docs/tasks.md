@@ -25,7 +25,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 2.0 Cadastro e autenticação do proprietário — [Trello](https://trello.com/c/9yZ5IqHI)
 - [x] 3.0 Configuração e identidade da oficina — [Trello](https://trello.com/c/djMpDBgM)
 - [x] 4.0 Cadastro de clientes e veículos — [Trello](https://trello.com/c/mMMZ4IFR)
-- [ ] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
+- [x] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
 - [ ] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
 - [ ] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
 - [ ] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
@@ -216,11 +216,11 @@ OS numerada com cliente, veículo, relato, entrada, quilometragem e previsão op
 
 ## Subtarefas
 
-- [ ] 5.1 Persistir OS com numeração, cliente responsável, veículo, relato, entrada, quilometragem e previsão.
-- [ ] 5.2 Garantir unicidade da OS ativa no banco e tratamento de conflito pela API.
-- [ ] 5.3 Criar abertura, detalhe e pesquisa paginada por cliente/placa/número.
-- [ ] 5.4 Criar telas de abertura e detalhe com validações.
-- [ ] 5.5 Testes unitários: campos e estados ativos; integração PostgreSQL: duas aberturas concorrentes e consulta isolada.
+- [x] 5.1 Persistir OS com numeração, cliente responsável, veículo, relato, entrada, quilometragem e previsão.
+- [x] 5.2 Garantir unicidade da OS ativa no banco e tratamento de conflito pela API.
+- [x] 5.3 Criar abertura, detalhe e pesquisa paginada por cliente/placa/número.
+- [x] 5.4 Criar telas de abertura e detalhe com validações.
+- [x] 5.5 Testes unitários: campos e estados ativos; integração PostgreSQL: duas aberturas concorrentes e consulta isolada.
 
 ## Critérios de aceite
 
@@ -233,7 +233,9 @@ OS numerada com cliente, veículo, relato, entrada, quilometragem e previsão op
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída em 19/09/2026. Abertura numerada e idempotente, consulta isolada,
+busca por número/cliente/placa, bloqueio concorrente de OS ativa e interface responsiva.
+Evidências: [task-5-validacao.md](task-5-validacao.md); revisão: [5_task_review.md](5_task_review.md).
 
 ---
 
