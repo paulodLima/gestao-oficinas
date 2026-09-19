@@ -11,6 +11,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 @RestControllerAdvice
 public class ApiErrors {
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ResponseEntity<ProblemDetail> uploadSize(Exception e, HttpServletRequest request) {
+        return api(new ApiException(413,"LOGO_GRANDE","A logo deve ter até 2 MiB."),request);
+    }
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ProblemDetail> api(ApiException e, HttpServletRequest request) {
         var p=ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(e.status), e.getMessage());

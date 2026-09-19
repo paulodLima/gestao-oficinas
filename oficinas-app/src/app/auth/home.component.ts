@@ -1,13 +1,15 @@
 import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from './auth.service';
 
 @Component({
   selector: 'app-home',
+  imports: [RouterLink],
   template: `<main><header><a class="brand" href="/inicio">/ gestão oficinas</a><button (click)="logout()" [disabled]="busy()">Sair da conta</button></header>
     <section><p class="eyebrow">SUA OFICINA</p><h1>{{ auth.owner()?.oficina?.nome }}</h1>
     <p>Bem-vindo, {{ auth.owner()?.nome }}.</p>
+    <a routerLink="/configuracoes/oficina">Configurar dados e logo da oficina</a>
     <div class="ready"><span aria-hidden="true">✓</span><div><h2>Seu acesso está pronto.</h2><p>Você está na área protegida da sua oficina. Os recursos de clientes e serviços serão disponibilizados nas próximas etapas.</p></div></div>
     @if(error()){<p role="alert">{{ error() }}</p>}
     <p class="account">Conectado como {{ auth.owner()?.email }}</p></section></main>`,
