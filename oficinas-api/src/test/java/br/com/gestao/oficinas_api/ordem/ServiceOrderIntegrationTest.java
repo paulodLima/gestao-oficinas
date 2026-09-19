@@ -1,5 +1,4 @@
 package br.com.gestao.oficinas_api.ordem;
-
 import java.net.*;
 import java.net.http.*;
 import java.time.Instant;
@@ -16,7 +15,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.*;
 import tools.jackson.databind.*;
 import static org.junit.jupiter.api.Assertions.*;
-
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 class ServiceOrderIntegrationTest {
@@ -30,7 +28,6 @@ class ServiceOrderIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     private final ObjectMapper mapper = new ObjectMapper();
     private static final String PASSWORD = "Oficina-segura-123";
-
     class Browser {
         final HttpClient client = HttpClient.newBuilder()
             .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL)).build();
@@ -57,7 +54,6 @@ class ServiceOrderIntegrationTest {
         }
     }
     record Account(Browser primary, Browser secondary) {}
-
     private URI uri(String path) { return URI.create("http://localhost:" + port + path); }
     private Account account() throws Exception {
         String email = UUID.randomUUID() + "@example.test";
@@ -88,7 +84,6 @@ class ServiceOrderIntegrationTest {
             "entradaEm", Instant.now().minusSeconds(60).toString(), "kmEntrada", mileage,
             "previsaoEm", Instant.now().plusSeconds(86_400).toString());
     }
-
     @Test void opensNumberedOrdersAndSearchesByNumberCustomerAndFormattedPlate() throws Exception {
         Browser browser = account().primary();
         JsonNode customer = customer(browser, "Ana Souza", "52998224725");
@@ -107,7 +102,6 @@ class ServiceOrderIntegrationTest {
         assertEquals(1, search(browser, "OS-1").get("totalElements").asInt());
         assertEquals(200, browser.get("/api/ordens-servico/" + opened.get("id").asText()).statusCode());
     }
-
     @Test void allowsOnlyOneConcurrentActiveOrderForVehicle() throws Exception {
         Account account = account();
         JsonNode customer = customer(account.primary(), "Cliente Concorrente", "52998224725");
@@ -128,7 +122,6 @@ class ServiceOrderIntegrationTest {
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM ordem_servico WHERE veiculo_id=? AND encerrada_em IS NULL",
             Integer.class, UUID.fromString(vehicle.get("id").asText())));
     }
-
     @Test void blocksTransferWhileActiveAndKeepsHistoricalCustomerAfterClosing() throws Exception {
         Browser browser = account().primary();
         JsonNode oldCustomer = customer(browser, "Responsável original", "52998224725");
@@ -146,7 +139,6 @@ class ServiceOrderIntegrationTest {
         assertEquals(oldCustomer.get("id").asText(), detail.get("clienteId").asText());
         assertEquals("Responsável original", detail.get("clienteNome").asText());
     }
-
     @Test void validatesOwnershipFieldsPaginationAndShopIsolation() throws Exception {
         Browser first = account().primary();
         Browser second = account().primary();
@@ -164,7 +156,6 @@ class ServiceOrderIntegrationTest {
         assertEquals(400, first.get("/api/ordens-servico?size=101").statusCode());
         assertEquals(401, new Browser().get("/api/ordens-servico").statusCode());
     }
-
     @Test void replaysSameIdempotentOpeningAndRejectsDifferentPayload() throws Exception {
         Browser browser = account().primary();
         JsonNode customer = customer(browser, "Cliente Idempotente", "52998224725");
@@ -184,7 +175,6 @@ class ServiceOrderIntegrationTest {
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM ordem_servico WHERE veiculo_id=?",
             Integer.class, UUID.fromString(vehicle.get("id").asText())));
     }
-
     @Test void skipsStagesAndRequiresReasonWhenReturning() throws Exception {
         Browser browser = account().primary();
         JsonNode order = openedOrder(browser, "Cliente Fluxo", "52998224725", "FLX1A23");
@@ -204,7 +194,6 @@ class ServiceOrderIntegrationTest {
         assertEquals("Dono", timeline.get(0).get("autorNome").asText());
         assertFalse(timeline.get(0).get("createdAt").asText().isBlank());
     }
-
     @Test void publishesWithoutChangingStatusAndNeverLeaksInternalText() throws Exception {
         Browser owner = account().primary();
         Browser outsider = account().primary();
@@ -227,7 +216,42 @@ class ServiceOrderIntegrationTest {
             "publicada", false, "expectedVersion", 1)).statusCode());
         assertEquals(1, mapper.readTree(owner.get(updates + "/publicas").body()).size());
     }
-
+    @Test void preservesForecastHistoryAndPublicProjectionWithoutOwnerData() throws Exception {
+        Browser owner = account().primary();
+        Browser outsider = account().primary();
+        JsonNode order = openedOrder(owner, "Cliente Previsão", "52998224725", "PRV1A23");
+        String base = "/api/ordens-servico/" + order.get("id").asText();
+        assertEquals(400, owner.send("POST", base + "/previsao", forecastInput("2020-01-01T10:00:00-03:00", "Data inválida", 0)).statusCode());
+        assertEquals(400, owner.send("POST", base + "/previsao", forecastInput("2026-09-20T10:00:00", "Sem fuso", 0)).statusCode());
+        String next = Instant.now().plusSeconds(172_800).toString();
+        var changed = owner.send("POST", base + "/previsao", forecastInput(next, "Atraso do fornecedor", 0));
+        assertEquals(200, changed.statusCode(), changed.body());
+        assertEquals(Instant.parse(next).getEpochSecond(), Instant.parse(mapper.readTree(changed.body()).get("previsaoEm").asText()).getEpochSecond());
+        JsonNode history = mapper.readTree(owner.get(base + "/previsoes").body());
+        assertEquals(1, history.size());
+        assertEquals(order.get("previsaoEm").asText(), history.get(0).get("previsaoAnterior").asText());
+        assertEquals("Dono", history.get(0).get("autorNome").asText());
+        String publicHistory = owner.get(base + "/previsoes/publicas").body();
+        assertTrue(publicHistory.contains("Confirmar entrega da peça"));
+        assertFalse(publicHistory.contains("autorId") || publicHistory.contains("autorNome") || publicHistory.contains("textoInterno"));
+        assertEquals(404, outsider.get(base + "/previsoes/publicas").statusCode());
+        Map<String, Object> withoutDate = new HashMap<>();
+        withoutDate.put("previsao", null); withoutDate.put("motivoPublico", "Peça incompatível");
+        withoutDate.put("proximaAcao", "Localizar fornecedor alternativo."); withoutDate.put("expectedVersion", 1);
+        JsonNode cleared = mapper.readTree(owner.send("POST", base + "/previsao", withoutDate).body());
+        assertTrue(cleared.get("previsaoEm").isNull() && !cleared.get("atrasada").asBoolean() && mapper.readTree(owner.get(base + "/previsoes").body()).size() == 2);
+    }
+    @Test void marksOverdueExecutionButSeparatesReadyForPickup() throws Exception {
+        Browser owner = account().primary();
+        JsonNode order = openedOrder(owner, "Cliente Atraso", "52998224725", "ATR1A23");
+        UUID orderId = UUID.fromString(order.get("id").asText());
+        jdbc.update("UPDATE ordem_servico SET previsao_em=now()-interval '30 seconds' WHERE id=?", orderId);
+        String base = "/api/ordens-servico/" + orderId;
+        JsonNode overdue = mapper.readTree(owner.get(base).body());
+        assertTrue(overdue.get("atrasada").asBoolean() && !overdue.get("aguardandoRetirada").asBoolean());
+        JsonNode ready = mapper.readTree(owner.send("POST", base + "/status", Map.of("status", "PRONTO_PARA_RETIRADA", "expectedVersion", 0)).body());
+        assertTrue(!ready.get("atrasada").asBoolean() && ready.get("aguardandoRetirada").asBoolean());
+    }
     @Test void rejectsConcurrentStatusChangesWithTheSameVersion() throws Exception {
         Account account = account();
         JsonNode order = openedOrder(account.primary(), "Cliente Versão", "52998224725", "VER1A23");
@@ -249,10 +273,11 @@ class ServiceOrderIntegrationTest {
         }
         assertEquals(2, mapper.readTree(account.primary().get(path.replace("/status", "/atualizacoes")).body()).size());
     }
-
     private JsonNode search(Browser browser, String query) throws Exception {
         return mapper.readTree(browser.get("/api/ordens-servico?q=" + URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8)).body());
     }
+    private Map<String, Object> forecastInput(String forecast, String reason, int version) { return Map.of(
+        "previsao", forecast, "motivoPublico", reason, "proximaAcao", "Confirmar entrega da peça.", "expectedVersion", version); }
     private int openTogether(Browser browser, String csrf, JsonNode customer, JsonNode vehicle,
                              CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();

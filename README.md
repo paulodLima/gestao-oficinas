@@ -132,6 +132,11 @@ quando necessário e retornar no fluxo com motivo obrigatório. Cada mudança re
 data e hora na linha do tempo. Atualizações também podem ser publicadas sem mudar o status,
 mantendo texto público e observação interna em campos e projeções separados.
 
+A oficina também pode revisar a previsão de conclusão informando um motivo público e a próxima
+ação, ou registrar que ainda não existe uma nova data. O histórico preserva previsão anterior e
+nova, autor e instante. A interface destaca previsões ultrapassadas somente durante a execução e
+separa os veículos prontos que apenas aguardam retirada.
+
 Ver os serviços em execução:
 
 ```powershell

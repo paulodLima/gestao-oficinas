@@ -10,7 +10,8 @@ export type ServiceOrderStatus = 'RECEBIDO' | 'EM_DIAGNOSTICO' | 'AGUARDANDO_APR
 export interface ServiceOrder {
   id: string; numero: number; clienteId: string; clienteNome: string; veiculoId: string;
   placa: string; veiculo: string; relatoInicial: string; entradaEm: string; kmEntrada: number;
-  status: ServiceOrderStatus; previsaoEm: string | null; versao: number; createdAt: string;
+  status: ServiceOrderStatus; previsaoEm: string | null; atrasada: boolean; aguardandoRetirada: boolean;
+  versao: number; createdAt: string; updatedAt: string;
 }
 export interface ServiceOrderInput {
   clienteId: string; veiculoId: string; relatoInicial: string; entradaEm: string;
@@ -27,6 +28,13 @@ export interface StatusInput {
 }
 export interface UpdateInput {
   textoPublico: string; textoInterno: string; publicada: boolean; expectedVersion: number;
+}
+export interface ServiceOrderForecast {
+  id: string; previsaoAnterior: string | null; previsaoNova: string | null;
+  motivoPublico: string; proximaAcao: string; autorId: string; autorNome: string; createdAt: string;
+}
+export interface ForecastInput {
+  previsao: string | null; motivoPublico: string; proximaAcao: string; expectedVersion: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -52,6 +60,13 @@ export class ServiceOrderService {
   }
   async publish(id: string, input: UpdateInput) {
     return firstValueFrom(this.http.post<ServiceOrderEvent>(`/api/ordens-servico/${id}/atualizacoes`, input,
+      { headers: await this.headers() }));
+  }
+  forecasts(id: string) {
+    return firstValueFrom(this.http.get<ServiceOrderForecast[]>(`/api/ordens-servico/${id}/previsoes`));
+  }
+  async updateForecast(id: string, input: ForecastInput) {
+    return firstValueFrom(this.http.post<ServiceOrder>(`/api/ordens-servico/${id}/previsao`, input,
       { headers: await this.headers() }));
   }
   private async headers() {

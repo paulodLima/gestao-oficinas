@@ -51,6 +51,19 @@ public class ServiceOrderController {
     public List<PublicServiceOrderEvent> publicTimeline(Authentication authentication, @PathVariable UUID id) {
         return service.publicTimeline(identity(authentication), id);
     }
+    @PostMapping("/{id}/previsao")
+    public ServiceOrder updateForecast(Authentication authentication, @PathVariable UUID id,
+                                       @RequestBody ServiceOrderService.ForecastInput input) {
+        return service.updateForecast(identity(authentication), id, input);
+    }
+    @GetMapping("/{id}/previsoes")
+    public List<ServiceOrderForecast> forecasts(Authentication authentication, @PathVariable UUID id) {
+        return service.forecasts(identity(authentication), id);
+    }
+    @GetMapping("/{id}/previsoes/publicas")
+    public List<PublicServiceOrderForecast> publicForecasts(Authentication authentication, @PathVariable UUID id) {
+        return service.publicForecasts(identity(authentication), id);
+    }
     private Identidade identity(Authentication authentication) {
         if (authentication == null || !(authentication.getDetails() instanceof Identidade owner)) {
             throw new ApiException(401, "NAO_AUTENTICADO", "Entre novamente.");

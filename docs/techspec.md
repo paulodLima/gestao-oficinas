@@ -240,6 +240,12 @@ autor e instante. O encerramento permanece reservado à tarefa 17.
 
 Pronto não é encerrado nem atrasado de execução. Previsão null não gera atraso. Alteração com data conhecida → null mantém motivo/histórico. Fotos publicadas não desaparecem ao mudar status.
 
+Implementado na tarefa 12 com histórico imutável em `ordem_servico_previsao`, incluindo valor
+anterior/novo, motivo público, próxima ação, autor e instante. A alteração exige versão atual da
+OS, timestamp com offset e data futura quando informada. As consultas derivam atraso apenas para
+ordens em execução e mantêm `PRONTO_PARA_RETIRADA` como espera de retirada. A projeção pública
+omite a identidade do autor e qualquer conteúdo interno.
+
 Versões enviadas de adicional são imutáveis; decisões por item ou grupo dependente completo. Não permitir decisão contraditória posterior na mesma versão. Substituição marca pendências antigas indisponíveis e exige novo aceite para novos itens; escopo já aprovado/executado não é cobrado outra vez. Quantias aprovadas e executadas devem ser rastreadas à versão original. Encerramento cancela pendências explicitamente, preserva decisões e invalida grants na mesma transação.
 
 Problema e justificativa são obrigatórios no envio de adicionais. fotoIds deve pertencer à mesma oficina e OS; somente fotos publicadas podem acompanhar o envio ao cliente. Não publicar imagem interna implicitamente. Iniciar execução bloqueia a OS e o item e valida aprovação da versão indicada; pendência/recusa retorna 409. Conclusão exige EM_EXECUCAO anterior. Cancelar/substituir uma solicitação não apaga execução existente; nenhum valor executado pode migrar silenciosamente para outra versão.
