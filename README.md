@@ -90,7 +90,7 @@ Abra o frontend e clique em **Criar uma conta**. Informe seu nome, nome da ofici
 
 Em **Esqueci minha senha**, solicite a recuperação e abra o e-mail no Mailpit. O link dura 30 minutos, funciona uma única vez e a troca de senha encerra as sessões anteriores. O Mailpit apenas captura e-mails locais; não envia mensagens reais.
 
-Migrações do banco são aplicadas pelo Flyway. Swagger está desativado. A área autenticada inclui a identidade da oficina e o cadastro de clientes e veículos; ordens de serviço serão implementadas nas próximas tarefas.
+Migrações do banco são aplicadas pelo Flyway. Swagger está desativado. A área autenticada inclui a identidade da oficina, cadastro de clientes e veículos e abertura/consulta de ordens de serviço.
 
 ## Comandos úteis do Docker
 
@@ -116,8 +116,16 @@ Mercosul são normalizadas pela API.
 
 O e-mail do cliente pode ser confirmado por um código de seis dígitos capturado pelo Mailpit
 no desenvolvimento. O código vale por 10 minutos, permite no máximo cinco tentativas e tem
-limites de reenvio. Trocar o e-mail remove a verificação anterior. A abertura de ordens de
-serviço e o bloqueio de transferência durante uma ordem ativa pertencem à tarefa 5.
+limites de reenvio. Trocar o e-mail remove a verificação anterior. A transferência de
+responsável fica bloqueada enquanto houver ordem de serviço ativa.
+
+### Ordens de serviço
+
+Depois do login, acesse **Abrir e consultar ordens de serviço**. Cada OS recebe numeração
+sequencial própria da oficina e preserva o cliente responsável no momento da abertura,
+veículo, relato inicial, entrada, quilometragem e previsão opcional. A busca aceita número
+da OS, nome do cliente ou placa com ou sem máscara. Somente uma OS ativa pode existir por
+veículo; tentativas concorrentes retornam conflito sem criar duplicidade.
 
 Ver os serviços em execução:
 

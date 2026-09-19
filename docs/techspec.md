@@ -4,9 +4,9 @@ Versão 1.1 · Fonte funcional: [prompt.md](prompt.md) · Planejamento: [tasks.m
 
 ## 1. Escopo e estado atual
 
-Esta especificação define a implementação das tarefas 2–20. A tarefa 2 implementa identidade do proprietário; os demais módulos permanecem contratos a implementar.
+Esta especificação define a implementação das tarefas 2–20. As tarefas 2–5 implementam identidade, perfil da oficina, cadastros e abertura/consulta de ordens de serviço; os demais módulos permanecem contratos a implementar.
 
-Inventário atualizado: API Maven com Spring Boot 4.1.1, Java 21, Spring Security, Spring Session JDBC, Flyway, Spring Mail e PostgreSQL. Identidade usa JdbcTemplate com SQL parametrizado e transações explícitas para consumir tokens e invalidar sessões atomicamente; JPA continua disponível para próximos módulos. Angular 19/TypeScript 5.6/Express 4 com cadastro, login, recuperação, redefinição e página autenticada mínima. Docker usa PostgreSQL 17, Java 21 e Node 22; não exige Java/Node no host. Fotos e módulos de negócio ainda não foram implementados.
+Inventário atualizado: API Maven com Spring Boot 4.1.1, Java 21, Spring Security, Spring Session JDBC, Flyway, Spring Mail e PostgreSQL. Identidade usa JdbcTemplate com SQL parametrizado e transações explícitas para consumir tokens e invalidar sessões atomicamente; JPA continua disponível para próximos módulos. Angular 19/TypeScript 5.6/Express 4 com identidade, perfil da oficina, cadastros e ordens de serviço. Docker usa PostgreSQL 17, Java 21 e Node 22; não exige Java/Node no host. Fotos e os módulos operacionais restantes ainda não foram implementados.
 
 Compose possui postgres, api, app e Mailpit. PostgreSQL tem volume e healthcheck; API aguarda banco saudável; app aguarda início da API, não prontidão. API_URL agora define o destino privado do proxy Express; /api mantém mesma origem no navegador. Evidências: [task-1-validacao.md](task-1-validacao.md) e [task-2-validacao.md](task-2-validacao.md).
 
@@ -71,6 +71,25 @@ com `CODE_SECRET`, expira em 10 minutos, aceita cinco tentativas, exige 60 segun
 envios e limita emissões por cliente e IP em janelas de 15 minutos. O uso é único; alterar o
 e-mail remove a verificação e revoga desafios pendentes. O Angular entrega `/clientes-veiculos`
 com formulários reativos, busca, edição, transferência e layout validado a 320 px.
+
+### Implementação da tarefa 5 — abertura e consulta de ordens de serviço
+
+As migrações V4 e V5 criam a OS, o contador numérico por oficina e o registro de
+idempotência. A referência ao cliente responsável é imutável e independente do vínculo
+atual do veículo. Uma restrição parcial exclusiva em `(oficina_id, veiculo_id)` impede duas
+OS ativas inclusive sob concorrência; a abertura também bloqueia o veículo e confirma seu
+responsável atual. Transferências ficam bloqueadas até `encerrada_em` ser preenchido.
+
+`POST /api/ordens-servico` aceita `Idempotency-Key` UUID, registra hash do payload por
+oficina/proprietário/operação por 24 horas e reproduz a mesma OS para a mesma requisição;
+reuso da chave com outro payload retorna 409. `GET /api/ordens-servico` pagina e busca por
+número (`1` ou `OS-1`), nome do cliente ou placa com/sem máscara. O detalhe e a listagem
+sempre derivam `oficina_id` da sessão e retornam 404 para acesso cruzado.
+
+O Angular entrega `/ordens-servico` com diretório, busca, formulário de abertura e detalhe,
+validações de relato, entrada, quilometragem e previsão opcional. O layout mantém os mesmos
+recursos em desktop e a 320 px. O fluxo de transições e encerramento será implementado nas
+tarefas 6 e 17; nesta tarefa novas OS iniciam em `RECEBIDO`.
 
 Monólito modular Spring Boot, pacotes por domínio em br.com.gestao.oficinas_api: identidade, oficina, clientes, veiculos, ordens, vistoria, arquivos, adicionais, portal, notificacoes e auditoria. Controllers recebem DTOs validados; serviços transacionais aplicam regras; repositórios sempre recebem oficinaId autorizado. Entidades JPA não são respostas públicas. Injeção por construtor e propriedades tipadas.
 
