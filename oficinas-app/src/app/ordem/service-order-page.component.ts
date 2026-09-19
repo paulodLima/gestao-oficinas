@@ -3,7 +3,17 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderInput, ServiceOrderService, ServiceOrderStatus } from './service-order.service';
+import { ServiceOrder, ServiceOrderEvent, ServiceOrderInput, ServiceOrderService,
+  ServiceOrderStatus } from './service-order.service';
+
+const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
+  'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
+  'PRONTO_PARA_RETIRADA'];
+const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
+  RECEBIDO: 0, EM_DIAGNOSTICO: 10, AGUARDANDO_APROVACAO: 20, AGUARDANDO_PECAS: 30,
+  EM_MANUTENCAO: 40, FUNILARIA: 42, PINTURA: 44, EM_MONTAGEM: 50, EM_TESTES: 60,
+  PRONTO_PARA_RETIRADA: 70, ENTREGUE: 100, CANCELADO: 100
+};
 
 @Component({
   selector: 'app-service-order-page',
@@ -19,11 +29,13 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly customers = signal<Customer[]>([]);
   readonly vehicles = signal<Vehicle[]>([]);
   readonly selected = signal<ServiceOrder | null>(null);
+  readonly timeline = signal<ServiceOrderEvent[]>([]);
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal('');
   readonly success = signal('');
   readonly search = this.builder.nonNullable.control('', Validators.maxLength(100));
+  readonly statusOptions = ACTIVE_STATUSES;
   readonly activeCount = computed(() => this.orders().filter(item => !['ENTREGUE', 'CANCELADO'].includes(item.status)).length);
   readonly availableVehicles = computed(() => {
     const customerId = this.form.controls.clienteId.value;
@@ -37,6 +49,17 @@ export class ServiceOrderPageComponent implements OnInit {
     kmEntrada: ['', [Validators.required, Validators.pattern(/^\d{1,7}$/)]],
     previsaoEm: ['']
   });
+  readonly statusForm = this.builder.nonNullable.group({
+    status: ['' as ServiceOrderStatus | '', Validators.required],
+    motivo: ['', Validators.maxLength(1000)],
+    textoPublico: ['', Validators.maxLength(2000)],
+    textoInterno: ['', Validators.maxLength(2000)]
+  });
+  readonly updateForm = this.builder.nonNullable.group({
+    textoPublico: ['', Validators.maxLength(2000)],
+    textoInterno: ['', Validators.maxLength(2000)],
+    publicada: [false]
+  });
 
   ngOnInit() { void this.load(); }
   async load() {
@@ -46,12 +69,14 @@ export class ServiceOrderPageComponent implements OnInit {
         this.service.orders(), this.registrations.customers(), this.registrations.vehicles()
       ]);
       this.orders.set(orders.items); this.customers.set(customers.items); this.vehicles.set(vehicles.items);
-      this.selected.set(orders.items[0] ?? null);
+      const first = orders.items[0] ?? null;
+      this.selected.set(first);
+      if (first) await this.loadTimeline(first.id);
     } catch (error) { this.showError(error, 'Não foi possível carregar as ordens de serviço.'); }
     finally { this.loading.set(false); }
   }
   newOrder() {
-    this.selected.set(null); this.clearMessages();
+    this.selected.set(null); this.timeline.set([]); this.clearMessages();
     this.form.reset({ clienteId: '', veiculoId: '', relatoInicial: '',
       entradaEm: this.localDateTime(new Date()), kmEntrada: '', previsaoEm: '' });
   }
@@ -67,7 +92,10 @@ export class ServiceOrderPageComponent implements OnInit {
     }, 'Busca atualizada.');
   }
   async selectOrder(order: ServiceOrder) {
-    await this.perform(async () => this.selected.set(await this.service.order(order.id)), 'Detalhes atualizados.');
+    await this.perform(async () => {
+      const detail = await this.service.order(order.id);
+      this.selected.set(detail); this.resetWorkflowForms(); await this.loadTimeline(detail.id);
+    }, 'Detalhes atualizados.');
   }
   async createOrder() {
     this.form.markAllAsTouched(); this.clearMessages();
@@ -81,7 +109,55 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const opened = await this.service.create(input);
       this.orders.update(items => [opened, ...items]); this.selected.set(opened);
+      this.resetWorkflowForms(); await this.loadTimeline(opened.id);
     }, 'Ordem de serviço aberta com sucesso.');
+  }
+  async changeStatus() {
+    const order = this.selected();
+    this.statusForm.markAllAsTouched(); this.clearMessages();
+    if (!order || this.statusForm.invalid) { this.error.set('Selecione a nova etapa.'); return; }
+    if (this.requiresReason() && !this.statusForm.controls.motivo.value.trim()) {
+      this.error.set('Informe o motivo para retornar ou colocar uma etapa em espera.'); return;
+    }
+    const value = this.statusForm.getRawValue();
+    await this.perform(async () => {
+      const updated = await this.service.changeStatus(order.id, { ...value,
+        status: value.status as ServiceOrderStatus, expectedVersion: order.versao });
+      this.replaceOrder(updated); this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });
+      await this.loadTimeline(order.id);
+    }, 'Etapa atualizada e registrada na linha do tempo.');
+  }
+  async publishUpdate() {
+    const order = this.selected();
+    this.updateForm.markAllAsTouched(); this.clearMessages();
+    const value = this.updateForm.getRawValue();
+    if (!order || this.updateForm.invalid || (!value.textoPublico.trim() && !value.textoInterno.trim())) {
+      this.error.set('Escreva um texto público ou uma observação interna.'); return;
+    }
+    if (value.publicada && !value.textoPublico.trim()) {
+      this.error.set('Escreva o texto público antes de publicar para o cliente.'); return;
+    }
+    await this.perform(async () => {
+      await this.service.publish(order.id, { ...value, expectedVersion: order.versao });
+      const updated = await this.service.order(order.id);
+      this.replaceOrder(updated); this.updateForm.reset({ textoPublico: '', textoInterno: '', publicada: false });
+      await this.loadTimeline(order.id);
+    }, value.publicada ? 'Atualização publicada na linha do tempo.' : 'Observação interna registrada.');
+  }
+  requiresReason() {
+    const current = this.selected()?.status;
+    const target = this.statusForm.controls.status.value as ServiceOrderStatus | '';
+    if (!current || !target) return false;
+    const returning = STATUS_SEQUENCE[target] < STATUS_SEQUENCE[current];
+    const waiting = ['AGUARDANDO_APROVACAO', 'AGUARDANDO_PECAS'].includes(target);
+    const executing = !['RECEBIDO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO_PECAS',
+      'PRONTO_PARA_RETIRADA', 'ENTREGUE', 'CANCELADO'].includes(current);
+    return returning || waiting && executing;
+  }
+  eventTitle(event: ServiceOrderEvent) {
+    return event.tipo === 'STATUS' ? (event.statusAnterior ?
+      `${this.statusLabel(event.statusAnterior)} → ${this.statusLabel(event.statusNovo!)}` :
+      `Ordem recebida · ${this.statusLabel(event.statusNovo!)}`) : 'Atualização registrada';
   }
   formatNumber(value: number) { return `OS-${value.toString().padStart(6, '0')}`; }
   formatPlate(value: string) { return value.length === 7 ? value.slice(0, 3) + '-' + value.slice(3) : value; }
@@ -90,6 +166,15 @@ export class ServiceOrderPageComponent implements OnInit {
   }
   statusLabel(value: ServiceOrderStatus) {
     return value.toLowerCase().replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
+  }
+  private async loadTimeline(id: string) { this.timeline.set(await this.service.timeline(id)); }
+  private replaceOrder(order: ServiceOrder) {
+    this.selected.set(order);
+    this.orders.update(items => items.map(item => item.id === order.id ? order : item));
+  }
+  private resetWorkflowForms() {
+    this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });
+    this.updateForm.reset({ textoPublico: '', textoInterno: '', publicada: false });
   }
   private localDateTime(value: Date) {
     const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);

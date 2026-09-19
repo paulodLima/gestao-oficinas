@@ -185,6 +185,71 @@ class ServiceOrderIntegrationTest {
             Integer.class, UUID.fromString(vehicle.get("id").asText())));
     }
 
+    @Test void skipsStagesAndRequiresReasonWhenReturning() throws Exception {
+        Browser browser = account().primary();
+        JsonNode order = openedOrder(browser, "Cliente Fluxo", "52998224725", "FLX1A23");
+        String path = "/api/ordens-servico/" + order.get("id").asText() + "/status";
+        var skipped = browser.send("POST", path, Map.of("status", "EM_TESTES", "expectedVersion", 0));
+        assertEquals(200, skipped.statusCode(), skipped.body());
+        assertEquals("EM_TESTES", mapper.readTree(skipped.body()).get("status").asText());
+        assertEquals(400, browser.send("POST", path,
+            Map.of("status", "EM_DIAGNOSTICO", "expectedVersion", 1)).statusCode());
+        var returned = browser.send("POST", path, Map.of("status", "EM_DIAGNOSTICO", "expectedVersion", 1,
+            "motivo", "Sintoma reapareceu durante o teste.", "textoPublico", "Retornamos ao diagnóstico.",
+            "textoInterno", "Rever fixação do agregado."));
+        assertEquals(200, returned.statusCode(), returned.body());
+        JsonNode timeline = mapper.readTree(browser.get(path.replace("/status", "/atualizacoes")).body());
+        assertEquals(3, timeline.size());
+        assertEquals("Sintoma reapareceu durante o teste.", timeline.get(0).get("motivo").asText());
+        assertEquals("Dono", timeline.get(0).get("autorNome").asText());
+        assertFalse(timeline.get(0).get("createdAt").asText().isBlank());
+    }
+
+    @Test void publishesWithoutChangingStatusAndNeverLeaksInternalText() throws Exception {
+        Browser owner = account().primary();
+        Browser outsider = account().primary();
+        JsonNode order = openedOrder(owner, "Cliente Publicação", "52998224725", "PUB1A23");
+        String updates = "/api/ordens-servico/" + order.get("id").asText() + "/atualizacoes";
+        var published = owner.send("POST", updates, Map.of("textoPublico", "Diagnóstico iniciado.",
+            "textoInterno", "Cliente relatou tentativa anterior em outra oficina.",
+            "publicada", true, "expectedVersion", 0));
+        assertEquals(200, published.statusCode(), published.body());
+        assertEquals("RECEBIDO", mapper.readTree(owner.get("/api/ordens-servico/" + order.get("id").asText()).body())
+            .get("status").asText());
+        String ownerTimeline = owner.get(updates).body();
+        assertTrue(ownerTimeline.contains("tentativa anterior"));
+        String publicTimeline = owner.get(updates + "/publicas").body();
+        assertTrue(publicTimeline.contains("Diagnóstico iniciado"));
+        assertFalse(publicTimeline.contains("tentativa anterior"));
+        assertFalse(publicTimeline.contains("textoInterno"));
+        assertEquals(404, outsider.get(updates + "/publicas").statusCode());
+        assertEquals(200, owner.send("POST", updates, Map.of("textoInterno", "Conferir torque.",
+            "publicada", false, "expectedVersion", 1)).statusCode());
+        assertEquals(1, mapper.readTree(owner.get(updates + "/publicas").body()).size());
+    }
+
+    @Test void rejectsConcurrentStatusChangesWithTheSameVersion() throws Exception {
+        Account account = account();
+        JsonNode order = openedOrder(account.primary(), "Cliente Versão", "52998224725", "VER1A23");
+        String path = "/api/ordens-servico/" + order.get("id").asText() + "/status";
+        String firstToken = account.primary().csrf();
+        String secondToken = account.secondary().csrf();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Integer> first = executor.submit(() -> changeTogether(account.primary(), firstToken, path,
+                "EM_DIAGNOSTICO", ready, start));
+            Future<Integer> second = executor.submit(() -> changeTogether(account.secondary(), secondToken, path,
+                "EM_MANUTENCAO", ready, start));
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+            List<Integer> statuses = new ArrayList<>(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)));
+            Collections.sort(statuses);
+            assertEquals(List.of(200, 409), statuses);
+        }
+        assertEquals(2, mapper.readTree(account.primary().get(path.replace("/status", "/atualizacoes")).body()).size());
+    }
+
     private JsonNode search(Browser browser, String query) throws Exception {
         return mapper.readTree(browser.get("/api/ordens-servico?q=" + URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8)).body());
     }
@@ -193,5 +258,18 @@ class ServiceOrderIntegrationTest {
         ready.countDown();
         assertTrue(start.await(5, TimeUnit.SECONDS));
         return browser.send("POST", "/api/ordens-servico", orderInput(customer, vehicle, 3000), csrf).statusCode();
+    }
+    private JsonNode openedOrder(Browser browser, String name, String cpf, String plate) throws Exception {
+        JsonNode customer = customer(browser, name, cpf);
+        JsonNode vehicle = vehicle(browser, customer, plate);
+        var response = browser.send("POST", "/api/ordens-servico", orderInput(customer, vehicle, 3000));
+        assertEquals(201, response.statusCode(), response.body());
+        return mapper.readTree(response.body());
+    }
+    private int changeTogether(Browser browser, String csrf, String path, String status,
+                               CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        assertTrue(start.await(5, TimeUnit.SECONDS));
+        return browser.send("POST", path, Map.of("status", status, "expectedVersion", 0), csrf).statusCode();
     }
 }

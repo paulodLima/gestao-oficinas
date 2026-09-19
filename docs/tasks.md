@@ -26,7 +26,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 3.0 Configuração e identidade da oficina — [Trello](https://trello.com/c/djMpDBgM)
 - [x] 4.0 Cadastro de clientes e veículos — [Trello](https://trello.com/c/mMMZ4IFR)
 - [x] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
-- [ ] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
+- [x] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
 - [ ] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
 - [ ] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
 - [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
@@ -255,11 +255,11 @@ Recebido, diagnóstico, aprovação, peças, manutenção, montagem, testes, pro
 
 ## Subtarefas
 
-- [ ] 6.1 Definir transições e etapas opcionais sem obrigar passagem por todas.
-- [ ] 6.2 Persistir eventos com autor/data e motivo obrigatório para retorno.
-- [ ] 6.3 Criar publicação de textos com campos públicos/internos separados.
-- [ ] 6.4 Criar interface de status e linha do tempo; estados terminais serão completados pela tarefa 17.
-- [ ] 6.5 Testes unitários: transições e retorno; integração: evento persistido e ausência de texto interno nas projeções públicas.
+- [x] 6.1 Definir transições e etapas opcionais sem obrigar passagem por todas.
+- [x] 6.2 Persistir eventos com autor/data e motivo obrigatório para retorno.
+- [x] 6.3 Criar publicação de textos com campos públicos/internos separados.
+- [x] 6.4 Criar interface de status e linha do tempo; estados terminais serão completados pela tarefa 17.
+- [x] 6.5 Testes unitários: transições e retorno; integração: evento persistido e ausência de texto interno nas projeções públicas.
 
 ## Critérios de aceite
 
@@ -270,6 +270,9 @@ Recebido, diagnóstico, aprovação, peças, manutenção, montagem, testes, pro
 - separar observação interna e pública.
 
 ## Entrega e validação
+
+Concluída em 19/09/2026. Evidências em `docs/task-6-validacao.md` e revisão em
+`docs/6_task_review.md`.
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 

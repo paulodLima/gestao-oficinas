@@ -16,6 +16,18 @@ export interface ServiceOrderInput {
   clienteId: string; veiculoId: string; relatoInicial: string; entradaEm: string;
   kmEntrada: number; previsaoEm: string | null;
 }
+export interface ServiceOrderEvent {
+  id: string; tipo: 'STATUS' | 'ATUALIZACAO'; statusAnterior: ServiceOrderStatus | null;
+  statusNovo: ServiceOrderStatus | null; motivo: string | null; textoPublico: string | null;
+  textoInterno: string | null; publicada: boolean; autorId: string; autorNome: string; createdAt: string;
+}
+export interface StatusInput {
+  status: ServiceOrderStatus; motivo: string; textoPublico: string;
+  textoInterno: string; expectedVersion: number;
+}
+export interface UpdateInput {
+  textoPublico: string; textoInterno: string; publicada: boolean; expectedVersion: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ServiceOrderService {
@@ -30,6 +42,17 @@ export class ServiceOrderService {
   async create(input: ServiceOrderInput) {
     return firstValueFrom(this.http.post<ServiceOrder>('/api/ordens-servico', input,
       { headers: { ...await this.headers(), 'Idempotency-Key': crypto.randomUUID() } }));
+  }
+  timeline(id: string) {
+    return firstValueFrom(this.http.get<ServiceOrderEvent[]>(`/api/ordens-servico/${id}/atualizacoes`));
+  }
+  async changeStatus(id: string, input: StatusInput) {
+    return firstValueFrom(this.http.post<ServiceOrder>(`/api/ordens-servico/${id}/status`, input,
+      { headers: await this.headers() }));
+  }
+  async publish(id: string, input: UpdateInput) {
+    return firstValueFrom(this.http.post<ServiceOrderEvent>(`/api/ordens-servico/${id}/atualizacoes`, input,
+      { headers: await this.headers() }));
   }
   private async headers() {
     const csrf = await firstValueFrom(this.http.get<{ token: string; headerName: string }>('/api/auth/csrf'));

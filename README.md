@@ -127,6 +127,11 @@ veículo, relato inicial, entrada, quilometragem e previsão opcional. A busca a
 da OS, nome do cliente ou placa com ou sem máscara. Somente uma OS ativa pode existir por
 veículo; tentativas concorrentes retornam conflito sem criar duplicidade.
 
+Na mesma tela, a oficina pode avançar ou pular etapas não terminais, usar Funilaria e Pintura
+quando necessário e retornar no fluxo com motivo obrigatório. Cada mudança registra autor,
+data e hora na linha do tempo. Atualizações também podem ser publicadas sem mudar o status,
+mantendo texto público e observação interna em campos e projeções separados.
+
 Ver os serviços em execução:
 
 ```powershell

@@ -10,4 +10,15 @@ class ServiceOrderStatusTest {
         assertFalse(ServiceOrderStatus.ENTREGUE.active());
         assertFalse(ServiceOrderStatus.CANCELADO.active());
     }
+
+    @Test void allowsForwardJumpsWithoutReason() {
+        assertFalse(ServiceOrderStatus.EM_TESTES.requiresReasonFrom(ServiceOrderStatus.RECEBIDO));
+        assertFalse(ServiceOrderStatus.PINTURA.requiresReasonFrom(ServiceOrderStatus.EM_DIAGNOSTICO));
+    }
+
+    @Test void requiresReasonForReturnsAndWaitingFromExecution() {
+        assertTrue(ServiceOrderStatus.EM_DIAGNOSTICO.requiresReasonFrom(ServiceOrderStatus.EM_TESTES));
+        assertTrue(ServiceOrderStatus.AGUARDANDO_PECAS.requiresReasonFrom(ServiceOrderStatus.EM_MANUTENCAO));
+        assertFalse(ServiceOrderStatus.AGUARDANDO_APROVACAO.requiresReasonFrom(ServiceOrderStatus.RECEBIDO));
+    }
 }

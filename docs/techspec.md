@@ -233,6 +233,11 @@ Ações de abertura, upload e decisão aceitam Idempotency-Key UUID. Armazenar c
 
 Status internos: RECEBIDO, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO, AGUARDANDO_PECAS, EM_MANUTENCAO, EM_MONTAGEM, EM_TESTES, PRONTO_PARA_RETIRADA, ENTREGUE, CANCELADO; FUNILARIA/PINTURA opcionais. Saltos permitidos entre não terminais; retornos na ordem do fluxo exigem motivo. Os estados de espera exigem motivo quando substituem uma etapa em execução. ENTREGUE/CANCELADO somente via encerramento. OS terminada não reabre; retorno gera outra OS.
 
+Implementado na tarefa 06 com `ordem_servico_evento`, controle otimista por `expectedVersion`,
+projeções separadas para o histórico interno e público e publicação de atualização sem alteração
+de status. A interface da OS permite saltos, retornos justificados e consulta cronológica com
+autor e instante. O encerramento permanece reservado à tarefa 17.
+
 Pronto não é encerrado nem atrasado de execução. Previsão null não gera atraso. Alteração com data conhecida → null mantém motivo/histórico. Fotos publicadas não desaparecem ao mudar status.
 
 Versões enviadas de adicional são imutáveis; decisões por item ou grupo dependente completo. Não permitir decisão contraditória posterior na mesma versão. Substituição marca pendências antigas indisponíveis e exige novo aceite para novos itens; escopo já aprovado/executado não é cobrado outra vez. Quantias aprovadas e executadas devem ser rastreadas à versão original. Encerramento cancela pendências explicitamente, preserva decisões e invalida grants na mesma transação.

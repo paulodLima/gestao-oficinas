@@ -39,6 +39,22 @@ public class ServiceOrderRepository {
         return PageResult.of(items, page, size, total);
     }
 
+    public List<ServiceOrderEvent> timeline(UUID shopId, UUID orderId) {
+        return jdbc.query(eventSelect() + " WHERE e.oficina_id=? AND e.ordem_servico_id=?" +
+            " ORDER BY e.created_at DESC,e.id DESC", this::mapEvent, shopId, orderId);
+    }
+
+    public List<PublicServiceOrderEvent> publicTimeline(UUID shopId, UUID orderId) {
+        return jdbc.query("""
+            SELECT e.id,e.tipo,e.status_anterior,e.status_novo,e.texto_publico,p.nome autor_nome,e.created_at
+              FROM ordem_servico_evento e
+              JOIN proprietario p ON p.id=e.autor_id AND p.oficina_id=e.oficina_id
+             WHERE e.oficina_id=? AND e.ordem_servico_id=? AND e.publicada=true
+               AND nullif(btrim(e.texto_publico),'') IS NOT NULL
+             ORDER BY e.created_at DESC,e.id DESC
+            """, this::mapPublicEvent, shopId, orderId);
+    }
+
     public ServiceOrder create(UUID shopId, UUID ownerId, UUID idempotencyKey, String bodyHash, CreateData data) {
         ServiceOrder replay = replay(shopId, ownerId, idempotencyKey, bodyHash);
         if (replay != null) return replay;
@@ -68,6 +84,8 @@ public class ServiceOrderRepository {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(409, "OS_ATIVA_EXISTENTE", "Já existe atendimento ativo para este veículo.");
         }
+        insertEvent(new EventData(shopId, id, ownerId, "STATUS", null, ServiceOrderStatus.RECEBIDO,
+            null, null, null, false));
         jdbc.update("INSERT INTO cadastro_auditoria(id,oficina_id,proprietario_id,recurso,recurso_id,acao) VALUES (?,?,?,?,?,?)",
             UUID.randomUUID(), shopId, ownerId, "ORDEM_SERVICO", id, "ORDEM_SERVICO_ABERTA");
         if (idempotencyKey != null) {
@@ -75,6 +93,34 @@ public class ServiceOrderRepository {
                 id, shopId, ownerId, OPEN_OPERATION, idempotencyKey);
         }
         return order(shopId, id);
+    }
+
+    public ServiceOrder changeStatus(UUID shopId, UUID ownerId, UUID orderId, StatusData data) {
+        ServiceOrder current = order(shopId, orderId);
+        int changed = jdbc.update("""
+            UPDATE ordem_servico SET status=?,versao=versao+1,updated_at=now()
+             WHERE oficina_id=? AND id=? AND versao=? AND encerrada_em IS NULL
+            """, data.status().name(), shopId, orderId, data.expectedVersion());
+        if (changed != 1) throw staleOrder(shopId, orderId);
+        insertEvent(new EventData(shopId, orderId, ownerId, "STATUS", current.status(), data.status(),
+            data.reason(), data.publicText(), data.internalText(), data.publicText() != null));
+        jdbc.update("INSERT INTO cadastro_auditoria(id,oficina_id,proprietario_id,recurso,recurso_id,acao) VALUES (?,?,?,?,?,?)",
+            UUID.randomUUID(), shopId, ownerId, "ORDEM_SERVICO", orderId, "STATUS_ALTERADO");
+        return order(shopId, orderId);
+    }
+
+    public ServiceOrderEvent publish(UUID shopId, UUID ownerId, UUID orderId, UpdateData data) {
+        int changed = jdbc.update("""
+            UPDATE ordem_servico SET versao=versao+1,updated_at=now()
+             WHERE oficina_id=? AND id=? AND versao=? AND encerrada_em IS NULL
+            """, shopId, orderId, data.expectedVersion());
+        if (changed != 1) throw staleOrder(shopId, orderId);
+        UUID eventId = insertEvent(new EventData(shopId, orderId, ownerId, "ATUALIZACAO", null, null,
+            null, data.publicText(), data.internalText(), data.published()));
+        jdbc.update("INSERT INTO cadastro_auditoria(id,oficina_id,proprietario_id,recurso,recurso_id,acao) VALUES (?,?,?,?,?,?)",
+            UUID.randomUUID(), shopId, ownerId, "ORDEM_SERVICO", orderId,
+            data.published() ? "ATUALIZACAO_PUBLICADA" : "ATUALIZACAO_INTERNA");
+        return event(shopId, eventId);
     }
 
     private ServiceOrder replay(UUID shopId, UUID ownerId, UUID key, String bodyHash) {
@@ -100,6 +146,29 @@ public class ServiceOrderRepository {
         return order(shopId, request.resourceId());
     }
 
+    private UUID insertEvent(EventData data) {
+        UUID eventId = UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO ordem_servico_evento(id,oficina_id,ordem_servico_id,tipo,status_anterior,
+              status_novo,motivo,texto_publico,texto_interno,publicada,autor_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, eventId, data.shopId(), data.orderId(), data.type(), name(data.previous()),
+            name(data.next()), data.reason(), data.publicText(), data.internalText(), data.published(),
+            data.ownerId());
+        return eventId;
+    }
+
+    private ServiceOrderEvent event(UUID shopId, UUID eventId) {
+        return jdbc.query(eventSelect() + " WHERE e.oficina_id=? AND e.id=?", this::mapEvent, shopId, eventId)
+            .stream().findFirst().orElseThrow(ServiceOrderRepository::notFound);
+    }
+
+    private String eventSelect() {
+        return "SELECT e.id,e.tipo,e.status_anterior,e.status_novo,e.motivo,e.texto_publico," +
+            "e.texto_interno,e.publicada,e.autor_id,p.nome autor_nome,e.created_at" +
+            " FROM ordem_servico_evento e JOIN proprietario p ON p.id=e.autor_id AND p.oficina_id=e.oficina_id";
+    }
+
     private String select() {
         return "SELECT os.id,os.numero,os.cliente_id,c.nome cliente_nome,os.veiculo_id,v.placa," +
             "concat_ws(' ',v.marca,v.modelo) veiculo,os.relato_inicial,os.entrada_em,os.km_entrada," +
@@ -117,6 +186,27 @@ public class ServiceOrderRepository {
             ServiceOrderStatus.valueOf(rs.getString("status")), instant(rs.getTimestamp("previsao_em")),
             rs.getLong("versao"), rs.getTimestamp("created_at").toInstant());
     }
+    private ServiceOrderEvent mapEvent(ResultSet rs, int row) throws SQLException {
+        return new ServiceOrderEvent(rs.getObject("id", UUID.class), rs.getString("tipo"),
+            status(rs.getString("status_anterior")), status(rs.getString("status_novo")),
+            rs.getString("motivo"), rs.getString("texto_publico"), rs.getString("texto_interno"),
+            rs.getBoolean("publicada"), rs.getObject("autor_id", UUID.class), rs.getString("autor_nome"),
+            rs.getTimestamp("created_at").toInstant());
+    }
+    private PublicServiceOrderEvent mapPublicEvent(ResultSet rs, int row) throws SQLException {
+        return new PublicServiceOrderEvent(rs.getObject("id", UUID.class), rs.getString("tipo"),
+            status(rs.getString("status_anterior")), status(rs.getString("status_novo")),
+            rs.getString("texto_publico"), rs.getString("autor_nome"), rs.getTimestamp("created_at").toInstant());
+    }
+    private ApiException staleOrder(UUID shopId, UUID orderId) {
+        ServiceOrder current = order(shopId, orderId);
+        if (!current.status().active()) {
+            return new ApiException(409, "ORDEM_ENCERRADA", "A ordem de serviço já foi encerrada.");
+        }
+        return new ApiException(409, "ORDEM_DESATUALIZADA", "A ordem mudou. Recarregue antes de continuar.");
+    }
+    private static String name(ServiceOrderStatus value) { return value == null ? null : value.name(); }
+    private static ServiceOrderStatus status(String value) { return value == null ? null : ServiceOrderStatus.valueOf(value); }
     private static String escape(String value) { return value.replace("%", "").replace("_", ""); }
     private static Timestamp timestamp(Instant value) { return value == null ? null : Timestamp.from(value); }
     private static Instant instant(Timestamp value) { return value == null ? null : value.toInstant(); }
@@ -125,5 +215,12 @@ public class ServiceOrderRepository {
     }
     public record CreateData(UUID customerId, UUID vehicleId, String report, Instant entryAt,
                              int mileage, Instant forecastAt) {}
+    public record StatusData(ServiceOrderStatus status, String reason, String publicText,
+                             String internalText, long expectedVersion) {}
+    public record UpdateData(String publicText, String internalText, boolean published,
+                             long expectedVersion) {}
+    private record EventData(UUID shopId, UUID orderId, UUID ownerId, String type,
+                             ServiceOrderStatus previous, ServiceOrderStatus next, String reason,
+                             String publicText, String internalText, boolean published) {}
     private record IdempotentRequest(String bodyHash, UUID resourceId) {}
 }
