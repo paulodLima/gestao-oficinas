@@ -94,6 +94,19 @@ Migrações do banco são aplicadas pelo Flyway. Swagger está desativado. A ár
 
 ## Comandos úteis do Docker
 
+### Identidade da oficina
+
+Depois do login, acesse **Configurar dados e logo da oficina**. Edite nome, contatos
+comerciais, endereço, horário de atendimento e fuso. A logo aceita PNG/JPEG de até 2 MiB
+e 4 megapixels e é salva separadamente ao selecionar o arquivo; também pode ser removida.
+Sem imagem, o perfil usa a inicial do nome.
+
+Ative **Publicar perfil da oficina** e salve para disponibilizar os dados comerciais no
+link **Abrir perfil publicado**. A publicação começa desativada. Desmarcar e salvar
+torna o perfil indisponível. O e-mail de login e dados de clientes não são publicados.
+Se outra aba salvar primeiro, recarregue os dados antes de aplicar suas alterações.
+Este perfil apresenta a oficina; acompanhamento de serviços será entregue nas tarefas futuras.
+
 Ver os serviços em execução:
 
 ```powershell

@@ -45,7 +45,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(a->a
                 .requestMatchers("/api/auth/csrf","/api/auth/cadastro","/api/auth/login",
                     "/api/auth/recuperacao","/api/auth/redefinicao").permitAll()
-                .requestMatchers("/api/auth/me","/api/auth/logout","/api/oficina").hasRole("PROPRIETARIO")
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/publico/oficinas/*", "/api/publico/oficinas/*/logo").permitAll()
+                .requestMatchers("/api/auth/me","/api/auth/logout","/api/oficina","/api/oficina/logo").hasRole("PROPRIETARIO")
                 .anyRequest().denyAll())
             .exceptionHandling(e->e
                 .authenticationEntryPoint((req,res,ex)->ApiErrors.write(res,401,"NAO_AUTENTICADO","Entre para continuar."))

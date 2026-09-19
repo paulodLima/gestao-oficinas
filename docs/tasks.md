@@ -23,7 +23,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 
 - [x] 1.0 Definir contratos e arquitetura do MVP — [Trello](https://trello.com/c/oGLFBfHw)
 - [x] 2.0 Cadastro e autenticação do proprietário — [Trello](https://trello.com/c/9yZ5IqHI)
-- [ ] 3.0 Configuração e identidade da oficina — [Trello](https://trello.com/c/djMpDBgM)
+- [x] 3.0 Configuração e identidade da oficina — [Trello](https://trello.com/c/djMpDBgM)
 - [ ] 4.0 Cadastro de clientes e veículos — [Trello](https://trello.com/c/mMMZ4IFR)
 - [ ] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
 - [ ] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
@@ -141,10 +141,10 @@ Nome, logo, contatos, endereço e horário de atendimento.
 
 ## Subtarefas
 
-- [ ] 3.1 Criar consulta e edição autorizada dos dados e horário da oficina.
-- [ ] 3.2 Adicionar logo com formato/tamanho validados e alternativa sem imagem.
-- [ ] 3.3 Criar formulário responsivo e representação pública dos dados liberados.
-- [ ] 3.4 Testes unitários: campos e logo; integração: gravação/consulta e recusa de edição por outra oficina.
+- [x] 3.1 Criar consulta e edição autorizada dos dados e horário da oficina.
+- [x] 3.2 Adicionar logo com formato/tamanho validados e alternativa sem imagem.
+- [x] 3.3 Criar formulário responsivo e representação pública dos dados liberados.
+- [x] 3.4 Testes unitários: campos e logo; integração: gravação/consulta e recusa de edição por outra oficina.
 
 ## Critérios de aceite
 
@@ -157,7 +157,9 @@ Nome, logo, contatos, endereço e horário de atendimento.
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída em 19/09/2026. Edição isolada por oficina, logo normalizada, perfil público opt-in,
+controle de versão e interface responsiva entregues. Evidências: [task-3-validacao.md](task-3-validacao.md);
+revisão: [3_task_review.md](3_task_review.md).
 
 ---
 

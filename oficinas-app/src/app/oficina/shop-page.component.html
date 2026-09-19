@@ -1,0 +1,40 @@
+<header><a routerLink="/inicio">/ gestão oficinas</a><a routerLink="/inicio">Voltar ao início</a></header>
+<main>
+  <p class="eyebrow">CONFIGURAÇÕES / IDENTIDADE</p>
+  <h1>O jeito de apresentar<br>a sua oficina.</h1>
+  <p class="intro">Organize as informações que ajudam seu cliente a encontrar você.</p>
+  @if (error()) { <p role="alert" class="notice error">{{ error() }}</p> }
+  @if (success()) { <p role="status" class="notice success">{{ success() }}</p> }
+  @if (loading()) { <p role="status">Carregando os dados da oficina…</p> }
+  @if (!loading()) {
+  @if (shop(); as current) {
+    <div class="layout"><section>
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <fieldset [disabled]="busy()"><legend>01 / Informações da oficina</legend>
+          <label for="shop-name">Nome da oficina *</label><input id="shop-name" formControlName="nome" maxlength="120" autocomplete="organization">
+          <div class="pair"><div><label for="shop-phone">Telefone de contato</label><input id="shop-phone" type="tel" formControlName="telefone" maxlength="30" autocomplete="tel"></div>
+          <div><label for="shop-email">E-mail de contato</label><input id="shop-email" type="email" formControlName="emailContato" maxlength="254" autocomplete="email"></div></div>
+          <p class="hint">Use os contatos comerciais. O e-mail de acesso à conta permanece o mesmo.</p>
+          <label for="shop-address">Endereço</label><textarea id="shop-address" formControlName="endereco" maxlength="500" rows="3" autocomplete="street-address"></textarea>
+          <label for="shop-hours">Horário de atendimento</label><textarea id="shop-hours" formControlName="horario" maxlength="1000" rows="3" placeholder="Segunda a sexta: 8h às 18h. Sábado: 8h às 12h."></textarea>
+          <label for="shop-timezone">Fuso horário *</label><input id="shop-timezone" formControlName="fuso" maxlength="80" list="timezones">
+          <datalist id="timezones"><option value="America/Sao_Paulo"></option><option value="America/Manaus"></option><option value="America/Rio_Branco"></option><option value="America/Noronha"></option></datalist>
+          <label class="toggle"><input type="checkbox" formControlName="perfilPublico"> Publicar perfil da oficina</label>
+          <p class="hint">Ao ativar e salvar, nome, logo, contatos, endereço, horário e fuso ficam disponíveis a quem abrir o link público.</p>
+          <button type="submit" class="primary">{{ busy() ? 'Salvando…' : 'Salvar informações' }}</button>
+        </fieldset>
+      </form>
+      <section class="logo"><h2>02 / Logo da oficina</h2><p>PNG ou JPEG, até 2 MiB e 4 megapixels. Sem imagem, mostramos a inicial da oficina.</p>
+        <label for="shop-logo">Selecionar logo</label><input id="shop-logo" type="file" accept="image/png,image/jpeg" (change)="upload($event)" [disabled]="busy()">
+        <p class="hint">A logo é salva ao selecionar o arquivo.</p>
+        @if (current.temLogo) { <button type="button" (click)="removeLogo()" [disabled]="busy()">Remover logo</button> }
+      </section>
+    </section><aside><p class="eyebrow">PRÉVIA PARA O CLIENTE</p>
+      @for (version of [current.versao]; track version) { <app-shop-identity [profile]="preview()" /> }
+      @if (current.perfilPublico) { <a class="public-link" [routerLink]="['/oficina', current.slug]" target="_blank" rel="noopener">Abrir perfil publicado ↗</a> }
+      @else { <p class="hint">Seu perfil ainda não está publicado.</p> }
+    </aside></div>
+  }
+  }
+  @if (!loading()) { <button class="reload" type="button" (click)="load()" [disabled]="busy()">Recarregar dados salvos</button> }
+</main>

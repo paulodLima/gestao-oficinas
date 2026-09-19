@@ -59,9 +59,6 @@ public class AuthController {
         return view(o);
     }
     @GetMapping("/auth/me") public Me me(Authentication auth) { return view(owner(auth)); }
-    @GetMapping("/oficina") public OficinaView shop(Authentication auth) {
-        var o=owner(auth);return new OficinaView(o.oficinaId(),o.oficinaNome());
-    }
     private IdentidadeRepository.Proprietario owner(Authentication auth) {
         if(!(auth.getDetails() instanceof Identidade identity))throw new ApiException(401,"NAO_AUTENTICADO","Entre novamente.");
         return repository.porIdentidade(identity).orElseThrow(()->new ApiException(401,"NAO_AUTENTICADO","Entre novamente."));

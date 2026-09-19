@@ -21,6 +21,36 @@ Compose possui postgres, api, app e Mailpit. PostgreSQL tem volume e healthcheck
 
 ## 2. Arquitetura e decisões
 
+### Implementação da tarefa 3 — perfil da oficina
+
+`GET /api/oficina` retorna id, slug imutável, nome, telefone, emailContato, endereco,
+horario (texto livre de até 1000 caracteres), fuso IANA, perfilPublico, temLogo e versao.
+`PATCH /api/oficina` aceita somente esses campos editáveis e exige versao; campos omitidos
+são preservados, texto vazio limpa contatos/endereço/horário, null e campos desconhecidos
+são rejeitados. Nome é obrigatório, até 120 caracteres. Todas as escritas derivam a oficina
+da sessão, com CSRF, atualização condicional de versão (409 em conflito) e auditoria na
+mesma transação. E-mail de contato não altera credenciais do proprietário.
+
+`PUT /api/oficina/logo?versao=N` recebe multipart `arquivo`; `DELETE` no mesmo caminho
+remove a logo. `GET /api/oficina/logo` serve a imagem autenticada. Limites específicos da
+logo: PNG/JPEG, 2 MiB, 4 megapixels, conteúdo decodificado e MIME conferidos. Normalização
+para PNG de até 512 px remove metadados; SVG/WebP/HEIC não são aceitos para logo. O pequeno
+arquivo normalizado fica em bytea no PostgreSQL, com backup e transação junto ao cadastro.
+Isso não substitui o adaptador de fotos de OS previsto na tarefa 8.
+
+O proprietário publica explicitamente o perfil (`perfilPublico=false` por padrão).
+`GET /api/publico/oficinas/{slug}` e `.../{slug}/logo` retornam somente dados comerciais
+liberados, ou 404 se não publicados. Nunca incluem proprietário, e-mail de login, IDs
+internos ou versão. Respostas usam no-store; remoção/despublicação bloqueia novas leituras.
+O perfil `/oficina/:slug` e o componente compartilhável de identidade entregam a
+representação pública desta tarefa. Acompanhamento de OS e portal autenticado continuam
+nas tarefas 10–11; não são simulados aqui.
+
+Frontend: `/configuracoes/oficina`, formulário reativo, prévia, upload independente,
+alternativa por inicial sem logo, estados de falha e recarga explícita em conflito.
+Referências: [multipart Spring](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/multipart-forms.html)
+e [formulários reativos Angular](https://angular.dev/guide/forms/reactive-forms).
+
 Monólito modular Spring Boot, pacotes por domínio em br.com.gestao.oficinas_api: identidade, oficina, clientes, veiculos, ordens, vistoria, arquivos, adicionais, portal, notificacoes e auditoria. Controllers recebem DTOs validados; serviços transacionais aplicam regras; repositórios sempre recebem oficinaId autorizado. Entidades JPA não são respostas públicas. Injeção por construtor e propriedades tipadas.
 
 Angular organizado por funcionalidades com rotas lazy, serviços HTTP e formulários reativos. Autorização é aplicada no servidor, não por guards apenas. Portal e administração não compartilham DTOs privados.
