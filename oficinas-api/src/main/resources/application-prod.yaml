@@ -2,6 +2,7 @@ app:
   auth:
     secure-cookie: true
     public-url: ${PUBLIC_URL}
+    code-secret: ${CODE_SECRET}
   mail:
     from: ${MAIL_FROM}
 spring:

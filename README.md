@@ -90,7 +90,7 @@ Abra o frontend e clique em **Criar uma conta**. Informe seu nome, nome da ofici
 
 Em **Esqueci minha senha**, solicite a recuperação e abra o e-mail no Mailpit. O link dura 30 minutos, funciona uma única vez e a troca de senha encerra as sessões anteriores. O Mailpit apenas captura e-mails locais; não envia mensagens reais.
 
-Migrações do banco são aplicadas pelo Flyway. Swagger está desativado. A área autenticada atual confirma a identidade da oficina; clientes, veículos e serviços serão implementados nas próximas tarefas.
+Migrações do banco são aplicadas pelo Flyway. Swagger está desativado. A área autenticada inclui a identidade da oficina e o cadastro de clientes e veículos; ordens de serviço serão implementadas nas próximas tarefas.
 
 ## Comandos úteis do Docker
 
@@ -106,6 +106,18 @@ link **Abrir perfil publicado**. A publicação começa desativada. Desmarcar e 
 torna o perfil indisponível. O e-mail de login e dados de clientes não são publicados.
 Se outra aba salvar primeiro, recarregue os dados antes de aplicar suas alterações.
 Este perfil apresenta a oficina; acompanhamento de serviços será entregue nas tarefas futuras.
+
+### Clientes e veículos
+
+Depois do login, acesse **Cadastrar clientes e veículos**. É possível cadastrar, buscar e
+editar clientes, vincular vários veículos ao mesmo cliente, pesquisar CPF/placa com ou sem
+máscara e registrar a troca de responsável sem apagar o vínculo anterior. Placas antigas e
+Mercosul são normalizadas pela API.
+
+O e-mail do cliente pode ser confirmado por um código de seis dígitos capturado pelo Mailpit
+no desenvolvimento. O código vale por 10 minutos, permite no máximo cinco tentativas e tem
+limites de reenvio. Trocar o e-mail remove a verificação anterior. A abertura de ordens de
+serviço e o bloqueio de transferência durante uma ordem ativa pertencem à tarefa 5.
 
 Ver os serviços em execução:
 
@@ -165,6 +177,7 @@ $env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/oficinas"
 $env:SPRING_DATASOURCE_USERNAME = "postgres"
 $env:SPRING_DATASOURCE_PASSWORD = "postgres"
 $env:MAIL_FROM = "oficinas@local.test"
+$env:CODE_SECRET = "troque-por-um-segredo-com-24-caracteres"
 cd oficinas-api
 ./mvnw.cmd spring-boot:run
 ```
@@ -201,7 +214,7 @@ Os testes Angular usam Chrome instalado; se necessário, configure `CHROME_BIN` 
 
 ## Antes de publicar em produção
 
-O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banco privado com credenciais próprias e SMTP externo configurado (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `PUBLIC_URL`). O perfil exige cookie Secure e URL pública HTTPS. SMTP externo e domínio remetente ainda não foram validados.
+O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banco privado com credenciais próprias e SMTP externo configurado (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `PUBLIC_URL`). Defina também um `CODE_SECRET` aleatório e exclusivo, com ao menos 24 caracteres, para o HMAC dos códigos de cliente. O perfil exige cookie Secure e URL pública HTTPS. SMTP externo e domínio remetente ainda não foram validados.
 
 O proxy Express sobrescreve o IP encaminhado; a API só o aceita do host definido em `APP_AUTH_TRUSTED_PROXY_HOST` (`app` no Compose). Se houver outro balanceador, configure a cadeia confiável antes de publicar; não habilite confiança irrestrita em cabeçalhos. Não exponha banco nem Mailpit publicamente.
 
