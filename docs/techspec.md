@@ -51,6 +51,27 @@ alternativa por inicial sem logo, estados de falha e recarga explícita em confl
 Referências: [multipart Spring](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/multipart-forms.html)
 e [formulários reativos Angular](https://angular.dev/guide/forms/reactive-forms).
 
+### Implementação da tarefa 4 — clientes e veículos
+
+A migração V3 cria `cliente`, `veiculo`, `vinculo_cliente_veiculo`,
+`verificacao_email_cliente` e `cadastro_auditoria`. CPF e placa são únicos por oficina;
+FKs compostas impedem vínculos entre oficinas e um índice parcial garante um único
+responsável atual por veículo. A troca encerra o vínculo atual e cria outro na mesma
+transação, com controle otimista pela versão do veículo. O histórico não é exposto nas
+respostas do novo responsável. A tarefa 5 adicionará a referência imutável do cliente da
+OS e o bloqueio de transferência enquanto existir OS ativa.
+
+As rotas privadas `/api/clientes` e `/api/veiculos` aplicam paginação, busca de até 100
+caracteres, escopo derivado da sessão, CSRF, validação de payload e auditoria. A busca aceita
+CPF e placa com ou sem máscara. Placas antigas e Mercosul são armazenadas sem pontuação e em
+maiúsculas. Escritas concorrentes retornam 409 e duplicidades são isoladas por oficina.
+
+A verificação de e-mail emite código aleatório de seis dígitos, guarda somente HMAC SHA-256
+com `CODE_SECRET`, expira em 10 minutos, aceita cinco tentativas, exige 60 segundos entre
+envios e limita emissões por cliente e IP em janelas de 15 minutos. O uso é único; alterar o
+e-mail remove a verificação e revoga desafios pendentes. O Angular entrega `/clientes-veiculos`
+com formulários reativos, busca, edição, transferência e layout validado a 320 px.
+
 Monólito modular Spring Boot, pacotes por domínio em br.com.gestao.oficinas_api: identidade, oficina, clientes, veiculos, ordens, vistoria, arquivos, adicionais, portal, notificacoes e auditoria. Controllers recebem DTOs validados; serviços transacionais aplicam regras; repositórios sempre recebem oficinaId autorizado. Entidades JPA não são respostas públicas. Injeção por construtor e propriedades tipadas.
 
 Angular organizado por funcionalidades com rotas lazy, serviços HTTP e formulários reativos. Autorização é aplicada no servidor, não por guards apenas. Portal e administração não compartilham DTOs privados.

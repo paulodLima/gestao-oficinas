@@ -1,0 +1,154 @@
+<header class="topbar">
+  <a routerLink="/inicio" class="brand">/ gestão oficinas</a>
+  <a routerLink="/inicio">Voltar ao início</a>
+</header>
+
+<main>
+  <div class="hero">
+    <div>
+      <p class="eyebrow">CADASTROS / RELACIONAMENTO</p>
+      <h1>Clientes em ordem.<br>Veículos no lugar certo.</h1>
+      <p class="intro">Mantenha responsáveis, contatos e placas prontos para abrir o próximo atendimento.</p>
+    </div>
+    <div class="summary" aria-label="Resumo dos cadastros">
+      <span><strong>{{ customers().length }}</strong> clientes</span>
+      <span><strong>{{ vehicles().length }}</strong> veículos</span>
+    </div>
+  </div>
+
+  @if (error()) { <p role="alert" class="notice error">{{ error() }}</p> }
+  @if (success()) { <p role="status" class="notice success">{{ success() }}</p> }
+  @if (loading()) { <p role="status" class="loading">Carregando clientes e veículos…</p> }
+
+  @if (!loading()) {
+    <div class="tabs" role="tablist" aria-label="Tipo de cadastro">
+      <button type="button" role="tab" [attr.aria-selected]="pane() === 'clientes'" (click)="pane.set('clientes')">Clientes</button>
+      <button type="button" role="tab" [attr.aria-selected]="pane() === 'veiculos'" (click)="pane.set('veiculos')">Veículos</button>
+    </div>
+
+    @if (pane() === 'clientes') {
+      <section class="workspace" aria-label="Cadastro de clientes">
+        <div class="directory">
+          <div class="section-heading">
+            <div><p class="step">01</p><h2>Clientes</h2></div>
+            <button type="button" class="secondary" (click)="newCustomer()">Novo cliente</button>
+          </div>
+          <form class="search" (submit)="$event.preventDefault(); searchCustomers()">
+            <label for="customer-search">Buscar por nome, CPF, e-mail ou telefone</label>
+            <div><input id="customer-search" [formControl]="customerSearch" maxlength="100" autocomplete="off">
+              <button type="submit" [disabled]="busy()">Buscar</button></div>
+          </form>
+          @if (!customers().length) {
+            <div class="empty"><h3>Nenhum cliente encontrado.</h3><p>Cadastre o primeiro cliente ou ajuste a busca.</p></div>
+          }
+          <div class="cards">
+            @for (customer of customers(); track customer.id) {
+              <button type="button" class="record" [class.selected]="editingCustomer()?.id === customer.id" (click)="editCustomer(customer)">
+                <span class="avatar" aria-hidden="true">{{ customer.nome.charAt(0).toUpperCase() }}</span>
+                <span><strong>{{ customer.nome }}</strong><small>{{ formatCpf(customer.cpf) }}</small>
+                  <small>{{ customer.email || customer.telefone || 'Sem contato cadastrado' }}</small></span>
+                <span class="badge" [class.verified]="customer.emailVerificadoEm">{{ customer.emailVerificadoEm ? 'Verificado' : 'Pendente' }}</span>
+              </button>
+            }
+          </div>
+        </div>
+
+        <aside class="editor">
+          <p class="step">02</p><h2>{{ editingCustomer() ? 'Editar cliente' : 'Novo cliente' }}</h2>
+          <form [formGroup]="customerForm" (ngSubmit)="saveCustomer()">
+            <fieldset [disabled]="busy()">
+              <label for="customer-name">Nome completo *</label>
+              <input id="customer-name" formControlName="nome" maxlength="120" autocomplete="name">
+              @if (customerForm.controls.nome.touched && customerForm.controls.nome.invalid) { <small class="field-error">Informe o nome do cliente.</small> }
+
+              <label for="customer-cpf">CPF *</label>
+              <input id="customer-cpf" formControlName="cpf" maxlength="14" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">
+              @if (customerForm.controls.cpf.touched && customerForm.controls.cpf.invalid) { <small class="field-error">Informe os 11 dígitos do CPF.</small> }
+
+              <div class="pair"><div><label for="customer-phone">Telefone</label><input id="customer-phone" formControlName="telefone" maxlength="30" type="tel" autocomplete="tel"></div>
+                <div><label for="customer-email">E-mail</label><input id="customer-email" formControlName="email" maxlength="254" type="email" autocomplete="email"></div></div>
+              <p class="hint">O e-mail precisa ser verificado antes de receber códigos de acesso. CPF nunca é usado como senha.</p>
+              <button type="submit" class="primary">{{ busy() ? 'Salvando…' : editingCustomer() ? 'Salvar cliente' : 'Cadastrar cliente' }}</button>
+            </fieldset>
+          </form>
+
+          @if (editingCustomer(); as customer) {
+            <section class="verification" aria-labelledby="verification-title">
+              <div><p class="step">03</p><h3 id="verification-title">Canal de acesso</h3></div>
+              @if (!customer.email) { <p>Cadastre um e-mail para habilitar a verificação.</p> }
+              @else if (customer.emailVerificadoEm) { <p class="verified-copy"><strong>E-mail verificado.</strong><br>{{ customer.email }}</p> }
+              @else {
+                <p>Envie um código de seis dígitos para <strong>{{ customer.email }}</strong>.</p>
+                <button type="button" class="secondary" (click)="requestVerification(customer)" [disabled]="busy()">Enviar código</button>
+                @if (challenge()?.clienteId === customer.id) {
+                  <div class="code"><label for="verification-code">Código recebido</label>
+                    <input id="verification-code" [formControl]="verificationCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+                    <button type="button" class="primary" (click)="confirmVerification(customer)" [disabled]="busy()">Confirmar e-mail</button></div>
+                }
+              }
+            </section>
+          }
+        </aside>
+      </section>
+    } @else {
+      <section class="workspace" aria-label="Cadastro de veículos">
+        <div class="directory">
+          <div class="section-heading">
+            <div><p class="step">01</p><h2>Veículos</h2></div>
+            <button type="button" class="secondary" (click)="newVehicle()">Novo veículo</button>
+          </div>
+          <form class="search" (submit)="$event.preventDefault(); searchVehicles()">
+            <label for="vehicle-search">Buscar por placa, veículo ou cliente</label>
+            <div><input id="vehicle-search" [formControl]="vehicleSearch" maxlength="100" autocomplete="off">
+              <button type="submit" [disabled]="busy()">Buscar</button></div>
+          </form>
+          @if (!vehicles().length) {
+            <div class="empty"><h3>Nenhum veículo encontrado.</h3><p>Cadastre um cliente antes de vincular o primeiro veículo.</p></div>
+          }
+          <div class="cards">
+            @for (vehicle of vehicles(); track vehicle.id) {
+              <button type="button" class="record vehicle-record" [class.selected]="editingVehicle()?.id === vehicle.id" (click)="editVehicle(vehicle)">
+                <span class="plate">{{ formatPlate(vehicle.placa) }}</span>
+                <span><strong>{{ vehicle.marca }} {{ vehicle.modelo }}</strong><small>{{ vehicle.ano || 'Ano não informado' }} · {{ vehicle.cor || 'Cor não informada' }}</small><small>Responsável: {{ vehicle.clienteNome }}</small></span>
+              </button>
+            }
+          </div>
+        </div>
+
+        <aside class="editor">
+          <p class="step">02</p><h2>{{ editingVehicle() ? 'Editar veículo' : 'Novo veículo' }}</h2>
+          @if (!customers().length) { <p class="notice warning">Cadastre ao menos um cliente antes de incluir um veículo.</p> }
+          <form [formGroup]="vehicleForm" (ngSubmit)="saveVehicle()">
+            <fieldset [disabled]="busy() || !customers().length">
+              <label for="vehicle-plate">Placa antiga ou Mercosul *</label>
+              <input id="vehicle-plate" formControlName="placa" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="ABC-1D23">
+              @if (vehicleForm.controls.placa.touched && vehicleForm.controls.placa.invalid) { <small class="field-error">Use o formato ABC-1234 ou ABC-1D23.</small> }
+              <div class="pair"><div><label for="vehicle-brand">Marca *</label><input id="vehicle-brand" formControlName="marca" maxlength="80"></div>
+                <div><label for="vehicle-model">Modelo *</label><input id="vehicle-model" formControlName="modelo" maxlength="120"></div></div>
+              <div class="pair"><div><label for="vehicle-year">Ano</label><input id="vehicle-year" formControlName="ano" maxlength="4" inputmode="numeric"></div>
+                <div><label for="vehicle-color">Cor</label><input id="vehicle-color" formControlName="cor" maxlength="50"></div></div>
+              <label for="vehicle-customer">Responsável *</label>
+              <select id="vehicle-customer" formControlName="clienteId" [attr.disabled]="editingVehicle() ? '' : null">
+                <option value="">Selecione o cliente</option>
+                @for (customer of activeCustomers(); track customer.id) { <option [value]="customer.id">{{ customer.nome }}</option> }
+              </select>
+              @if (editingVehicle()) { <p class="hint">A troca de responsável é registrada separadamente para preservar o histórico.</p> }
+              <button type="submit" class="primary">{{ busy() ? 'Salvando…' : editingVehicle() ? 'Salvar veículo' : 'Cadastrar veículo' }}</button>
+            </fieldset>
+          </form>
+
+          @if (editingVehicle(); as vehicle) {
+            <section class="transfer" aria-labelledby="transfer-title"><p class="step">03</p><h3 id="transfer-title">Trocar responsável</h3>
+              <p>Responsável atual: <strong>{{ vehicle.clienteNome }}</strong>. O vínculo anterior permanecerá registrado.</p>
+              <label for="transfer-customer">Novo responsável</label>
+              <select id="transfer-customer" [formControl]="transferCustomer">
+                @for (customer of activeCustomers(); track customer.id) { <option [value]="customer.id">{{ customer.nome }}</option> }
+              </select>
+              <button type="button" class="secondary" (click)="transfer()" [disabled]="busy() || transferCustomer.value === vehicle.clienteId">Registrar troca</button>
+            </section>
+          }
+        </aside>
+      </section>
+    }
+  }
+</main>

@@ -2,7 +2,7 @@
 
 Fonte funcional: [prompt.md](prompt.md).
 
-Status: tarefas 1.0 e 2.0 concluídas; tarefas 3–20 pendentes. Os 20 IDs preservam os cards existentes. Evidências em [task-1-validacao.md](task-1-validacao.md) e [task-2-validacao.md](task-2-validacao.md).
+Status: tarefas 1.0–4.0 concluídas; tarefas 5–20 pendentes. Os 20 IDs preservam os cards existentes. Evidências nas validações versionadas em `docs/task-*-validacao.md`.
 
 ## Premissas e decisões pendentes
 
@@ -24,7 +24,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 1.0 Definir contratos e arquitetura do MVP — [Trello](https://trello.com/c/oGLFBfHw)
 - [x] 2.0 Cadastro e autenticação do proprietário — [Trello](https://trello.com/c/9yZ5IqHI)
 - [x] 3.0 Configuração e identidade da oficina — [Trello](https://trello.com/c/djMpDBgM)
-- [ ] 4.0 Cadastro de clientes e veículos — [Trello](https://trello.com/c/mMMZ4IFR)
+- [x] 4.0 Cadastro de clientes e veículos — [Trello](https://trello.com/c/mMMZ4IFR)
 - [ ] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
 - [ ] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
 - [ ] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
@@ -179,11 +179,11 @@ Clientes com nome, CPF e contatos; veículos com placa, marca, modelo, ano e cor
 
 ## Subtarefas
 
-- [ ] 4.1 Criar cadastros, listagens e edição de clientes e veículos com validações.
-- [ ] 4.2 Normalizar placas e vincular vários veículos ao cliente na mesma oficina.
-- [ ] 4.3 Verificar contato por e-mail usando a base da tarefa 2; registrar troca de responsável sem modificar vínculo histórico das OS.
-- [ ] 4.4 Construir busca e formulários responsivos.
-- [ ] 4.5 Testes unitários: CPF, placa e vínculos; integração: cliente com vários veículos, duplicidade e acesso entre oficinas.
+- [x] 4.1 Criar cadastros, listagens e edição de clientes e veículos com validações.
+- [x] 4.2 Normalizar placas e vincular vários veículos ao cliente na mesma oficina.
+- [x] 4.3 Verificar contato por e-mail usando a base da tarefa 2; registrar troca de responsável sem modificar vínculo histórico das OS.
+- [x] 4.4 Construir busca e formulários responsivos.
+- [x] 4.5 Testes unitários: CPF, placa e vínculos; integração: cliente com vários veículos, duplicidade e acesso entre oficinas.
 
 ## Critérios de aceite
 
@@ -194,9 +194,9 @@ Clientes com nome, CPF e contatos; veículos com placa, marca, modelo, ano e cor
 
 ## Entrega e validação
 
-Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
-
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída. API, persistência e interface responsiva entregues com isolamento por
+oficina, controle de versão, verificação de e-mail e histórico de responsáveis. Evidências:
+[task-4-validacao.md](task-4-validacao.md); revisão: [4_task_review.md](4_task_review.md).
 
 ---
 
