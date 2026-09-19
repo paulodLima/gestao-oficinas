@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderService } from './service-order.service';
+import { ServiceOrder, ServiceOrderEvent, ServiceOrderService } from './service-order.service';
 import { ServiceOrderPageComponent } from './service-order-page.component';
 
 describe('Ordens de serviço', () => {
@@ -14,14 +14,19 @@ describe('Ordens de serviço', () => {
     veiculoId: 'v1', placa: 'BRA1E23', veiculo: 'Volkswagen T-Cross',
     relatoInicial: 'Ruído na suspensão dianteira.', entradaEm: '2026-09-19T10:00:00Z',
     kmEntrada: 48210, status: 'RECEBIDO', previsaoEm: null, versao: 0, createdAt: '2026-09-19T10:00:00Z' };
+  const event: ServiceOrderEvent = { id: 'e1', tipo: 'STATUS', statusAnterior: null,
+    statusNovo: 'RECEBIDO', motivo: null, textoPublico: null, textoInterno: null,
+    publicada: false, autorId: 'p1', autorNome: 'Dono', createdAt: '2026-09-19T10:00:00Z' };
   let service: jasmine.SpyObj<ServiceOrderService>;
   let registrations: jasmine.SpyObj<CustomerVehicleService>;
 
   beforeEach(() => {
-    service = jasmine.createSpyObj<ServiceOrderService>('ServiceOrderService', ['orders', 'order', 'create']);
+    service = jasmine.createSpyObj<ServiceOrderService>('ServiceOrderService',
+      ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish']);
     registrations = jasmine.createSpyObj<CustomerVehicleService>('CustomerVehicleService', ['customers', 'vehicles']);
     service.orders.and.resolveTo({ items: [order], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     service.order.and.resolveTo(order);
+    service.timeline.and.resolveTo([event]);
     registrations.customers.and.resolveTo({ items: [customer], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     registrations.vehicles.and.resolveTo({ items: [vehicle], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     TestBed.configureTestingModule({ imports: [ServiceOrderPageComponent], providers: [provideRouter([]),
@@ -34,6 +39,7 @@ describe('Ordens de serviço', () => {
     expect(component.orders()).toEqual([order]);
     expect(component.selected()).toEqual(order);
     expect(component.activeCount()).toBe(1);
+    expect(component.timeline()).toEqual([event]);
   });
 
   it('impede abertura com relato e quilometragem inválidos', async () => {
@@ -63,5 +69,42 @@ describe('Ordens de serviço', () => {
     const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
     await component.load(); component.newOrder(); component.form.controls.clienteId.setValue('c1');
     expect(component.availableVehicles()).toEqual([vehicle]);
+  });
+
+  it('permite pular etapa e atualiza a versão exibida', async () => {
+    const updated = { ...order, status: 'EM_TESTES' as const, versao: 1 };
+    service.changeStatus.and.resolveTo(updated);
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.statusForm.controls.status.setValue('EM_TESTES');
+    await component.changeStatus();
+    expect(service.changeStatus).toHaveBeenCalledWith('o1', jasmine.objectContaining({
+      status: 'EM_TESTES', expectedVersion: 0
+    }));
+    expect(component.selected()).toEqual(updated);
+  });
+
+  it('exige motivo no retorno antes de chamar a API', async () => {
+    const current = { ...order, status: 'EM_TESTES' as const, versao: 2 };
+    service.orders.and.resolveTo({ items: [current], page: 0, size: 100, totalElements: 1, totalPages: 1 });
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.statusForm.controls.status.setValue('EM_DIAGNOSTICO');
+    expect(component.requiresReason()).toBeTrue();
+    await component.changeStatus();
+    expect(service.changeStatus).not.toHaveBeenCalled();
+    expect(component.error()).toContain('motivo');
+  });
+
+  it('registra publicação sem trocar a etapa', async () => {
+    service.publish.and.resolveTo({ ...event, id: 'e2', tipo: 'ATUALIZACAO',
+      textoPublico: 'Diagnóstico iniciado.', publicada: true });
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.updateForm.setValue({
+      textoPublico: 'Diagnóstico iniciado.', textoInterno: 'Conferir agregado.', publicada: true
+    });
+    await component.publishUpdate();
+    expect(service.publish).toHaveBeenCalledWith('o1', jasmine.objectContaining({
+      textoPublico: 'Diagnóstico iniciado.', textoInterno: 'Conferir agregado.', expectedVersion: 0
+    }));
+    expect(service.order).toHaveBeenCalledWith('o1');
   });
 });

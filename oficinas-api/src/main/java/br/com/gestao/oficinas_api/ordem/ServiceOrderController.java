@@ -3,6 +3,7 @@ package br.com.gestao.oficinas_api.ordem;
 import br.com.gestao.oficinas_api.cadastro.PageResult;
 import br.com.gestao.oficinas_api.identidade.*;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -31,6 +32,24 @@ public class ServiceOrderController {
                                                 @RequestBody ServiceOrderService.CreateInput input) {
         ServiceOrder result = service.create(identity(authentication), idempotencyKey, input);
         return ResponseEntity.created(URI.create("/api/ordens-servico/" + result.id())).body(result);
+    }
+    @PostMapping("/{id}/status")
+    public ServiceOrder changeStatus(Authentication authentication, @PathVariable UUID id,
+                                     @RequestBody ServiceOrderService.StatusInput input) {
+        return service.changeStatus(identity(authentication), id, input);
+    }
+    @GetMapping("/{id}/atualizacoes")
+    public List<ServiceOrderEvent> timeline(Authentication authentication, @PathVariable UUID id) {
+        return service.timeline(identity(authentication), id);
+    }
+    @PostMapping("/{id}/atualizacoes")
+    public ServiceOrderEvent publish(Authentication authentication, @PathVariable UUID id,
+                                     @RequestBody ServiceOrderService.UpdateInput input) {
+        return service.publish(identity(authentication), id, input);
+    }
+    @GetMapping("/{id}/atualizacoes/publicas")
+    public List<PublicServiceOrderEvent> publicTimeline(Authentication authentication, @PathVariable UUID id) {
+        return service.publicTimeline(identity(authentication), id);
     }
     private Identidade identity(Authentication authentication) {
         if (authentication == null || !(authentication.getDetails() instanceof Identidade owner)) {

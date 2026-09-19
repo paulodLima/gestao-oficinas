@@ -44,6 +44,58 @@
           <dl><div><dt>Entrada</dt><dd>{{ formatDate(order.entradaEm) }}</dd></div><div><dt>Quilometragem</dt><dd>{{ order.kmEntrada.toLocaleString('pt-BR') }} km</dd></div>
             <div><dt>Previsão inicial</dt><dd>{{ formatDate(order.previsaoEm) }}</dd></div></dl>
           <h3>Relato de entrada</h3><p class="report">{{ order.relatoInicial }}</p>
+          <section class="workflow" aria-labelledby="workflow-title">
+            <div class="subheading"><div><p class="step">03 / FLUXO</p><h3 id="workflow-title">Atualizar etapa</h3></div>
+              <span class="version">versão {{ order.versao }}</span></div>
+            <p class="hint">Etapas podem ser puladas. Retornos e esperas após execução exigem motivo.</p>
+            <form [formGroup]="statusForm" (ngSubmit)="changeStatus()">
+              <fieldset [disabled]="busy()">
+                <label for="order-status">Nova etapa *</label>
+                <select id="order-status" formControlName="status"><option value="">Selecione</option>
+                  @for (status of statusOptions; track status) { @if (status !== order.status) { <option [value]="status">{{ statusLabel(status) }}</option> } }
+                </select>
+                <label for="status-reason">Motivo @if (requiresReason()) { <span aria-hidden="true">*</span> }</label>
+                <textarea id="status-reason" formControlName="motivo" rows="2" maxlength="1000" [attr.aria-required]="requiresReason()" placeholder="Explique retornos ou mudanças para espera."></textarea>
+                @if (requiresReason()) { <small class="field-note">Obrigatório para esta transição.</small> }
+                <label for="status-public">Texto público opcional</label>
+                <textarea id="status-public" formControlName="textoPublico" rows="2" maxlength="2000" placeholder="O que o cliente poderá acompanhar."></textarea>
+                <label for="status-internal">Observação interna opcional</label>
+                <textarea id="status-internal" formControlName="textoInterno" rows="2" maxlength="2000" placeholder="Visível somente para a oficina."></textarea>
+                <button type="submit" class="primary full">{{ busy() ? 'Salvando…' : 'Atualizar etapa' }}</button>
+              </fieldset>
+            </form>
+          </section>
+
+          <section class="workflow" aria-labelledby="update-title">
+            <p class="step">04 / COMUNICAR</p><h3 id="update-title">Registrar sem mudar etapa</h3>
+            <form [formGroup]="updateForm" (ngSubmit)="publishUpdate()">
+              <fieldset [disabled]="busy()">
+                <label for="update-public">Texto público</label>
+                <textarea id="update-public" formControlName="textoPublico" rows="3" maxlength="2000" placeholder="Ex.: diagnóstico iniciado e veículo em avaliação."></textarea>
+                <label class="check"><input type="checkbox" formControlName="publicada"> Publicar para o cliente</label>
+                <label for="update-internal">Observação interna</label>
+                <textarea id="update-internal" formControlName="textoInterno" rows="3" maxlength="2000" placeholder="Anotação reservada à equipe."></textarea>
+                <p class="privacy-note"><strong>Separação protegida:</strong> observações internas nunca aparecem na projeção pública.</p>
+                <button type="submit" class="secondary full">{{ busy() ? 'Registrando…' : 'Registrar atualização' }}</button>
+              </fieldset>
+            </form>
+          </section>
+
+          <section class="timeline" aria-labelledby="timeline-title">
+            <p class="step">05 / HISTÓRICO</p><h3 id="timeline-title">Linha do tempo</h3>
+            @if (!timeline().length) { <p class="hint">Nenhum evento registrado.</p> }
+            <ol>
+              @for (event of timeline(); track event.id) {
+                <li><span class="timeline-mark" aria-hidden="true"></span><article>
+                  <div class="event-heading"><strong>{{ eventTitle(event) }}</strong><time>{{ formatDate(event.createdAt) }}</time></div>
+                  <small>por {{ event.autorNome }}</small>
+                  @if (event.motivo) { <p><b>Motivo:</b> {{ event.motivo }}</p> }
+                  @if (event.textoPublico) { <p class="public-text"><b>Público{{ event.publicada ? ' · publicado' : ' · rascunho' }}:</b> {{ event.textoPublico }}</p> }
+                  @if (event.textoInterno) { <p class="internal-text"><b>Interno:</b> {{ event.textoInterno }}</p> }
+                </article></li>
+              }
+            </ol>
+          </section>
           <button type="button" class="secondary full" (click)="newOrder()">Abrir outra ordem</button>
         } @else {
           <p class="step">02 / ABRIR</p><h2>Nova ordem de serviço</h2>

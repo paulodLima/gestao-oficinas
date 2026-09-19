@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.*;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,14 @@ public class ServiceOrderService {
     }
     public ServiceOrder order(Identidade owner, UUID id) {
         return repository.order(owner.oficinaId(), id);
+    }
+    public List<ServiceOrderEvent> timeline(Identidade owner, UUID id) {
+        repository.order(owner.oficinaId(), id);
+        return repository.timeline(owner.oficinaId(), id);
+    }
+    public List<PublicServiceOrderEvent> publicTimeline(Identidade owner, UUID id) {
+        repository.order(owner.oficinaId(), id);
+        return repository.publicTimeline(owner.oficinaId(), id);
     }
 
     @Transactional
@@ -50,6 +59,48 @@ public class ServiceOrderService {
         return repository.create(owner.oficinaId(), owner.id(), idempotencyKey, hash(data), data);
     }
 
+    @Transactional
+    public ServiceOrder changeStatus(Identidade owner, UUID id, StatusInput input) {
+        if (input == null || input.status() == null || input.expectedVersion() == null) {
+            throw invalid("Informe a nova etapa e a versão atual da ordem.");
+        }
+        if (!input.status().active()) {
+            throw new ApiException(409, "ENCERRAMENTO_ESPECIFICO", "Entrega e cancelamento serão feitos pelo encerramento da ordem.");
+        }
+        ServiceOrder current = repository.order(owner.oficinaId(), id);
+        requireVersion(current, input.expectedVersion());
+        if (current.status() == input.status()) {
+            throw invalid("Selecione uma etapa diferente da atual.");
+        }
+        String reason = text(input.motivo(), 1000, "O motivo deve ter até 1000 caracteres.");
+        if (input.status().requiresReasonFrom(current.status()) && reason == null) {
+            throw invalid("Informe o motivo para retornar ou colocar uma etapa em espera.");
+        }
+        var data = new ServiceOrderRepository.StatusData(input.status(), reason,
+            text(input.textoPublico(), 2000, "O texto público deve ter até 2000 caracteres."),
+            text(input.textoInterno(), 2000, "A observação interna deve ter até 2000 caracteres."),
+            input.expectedVersion());
+        return repository.changeStatus(owner.oficinaId(), owner.id(), id, data);
+    }
+
+    @Transactional
+    public ServiceOrderEvent publish(Identidade owner, UUID id, UpdateInput input) {
+        if (input == null || input.expectedVersion() == null) {
+            throw invalid("Informe a versão atual da ordem.");
+        }
+        requireVersion(repository.order(owner.oficinaId(), id), input.expectedVersion());
+        String publicText = text(input.textoPublico(), 2000, "O texto público deve ter até 2000 caracteres.");
+        String internalText = text(input.textoInterno(), 2000, "A observação interna deve ter até 2000 caracteres.");
+        if (publicText == null && internalText == null) {
+            throw invalid("Escreva um texto público ou uma observação interna.");
+        }
+        if (input.publicada() && publicText == null) {
+            throw invalid("Escreva o texto público antes de publicar para o cliente.");
+        }
+        return repository.publish(owner.oficinaId(), owner.id(), id,
+            new ServiceOrderRepository.UpdateData(publicText, internalText, input.publicada(), input.expectedVersion()));
+    }
+
     private String query(String value) {
         String result = value == null ? "" : value.strip();
         if (result.length() > 100) throw invalid("A busca deve ter até 100 caracteres.");
@@ -58,6 +109,16 @@ public class ServiceOrderService {
     private int page(int value) { if (value < 0) throw invalid("Página inválida."); return value; }
     private int size(int value) { if (value < 1 || value > 100) throw invalid("Tamanho de página inválido."); return value; }
     private ApiException invalid(String message) { return new ApiException(400, "DADOS_INVALIDOS", message); }
+    private String text(String value, int maximum, String message) {
+        String result = value == null ? "" : value.strip();
+        if (result.length() > maximum) throw invalid(message);
+        return result.isEmpty() ? null : result;
+    }
+    private void requireVersion(ServiceOrder order, long expectedVersion) {
+        if (order.versao() != expectedVersion) {
+            throw new ApiException(409, "ORDEM_DESATUALIZADA", "A ordem mudou. Recarregue antes de continuar.");
+        }
+    }
     private String hash(ServiceOrderRepository.CreateData data) {
         String payload = String.join("|", data.customerId().toString(), data.vehicleId().toString(), data.report(),
             data.entryAt().toString(), Integer.toString(data.mileage()), String.valueOf(data.forecastAt()));
@@ -70,4 +131,8 @@ public class ServiceOrderService {
     }
     public record CreateInput(UUID clienteId, UUID veiculoId, String relatoInicial,
                               Instant entradaEm, Integer kmEntrada, Instant previsaoEm) {}
+    public record StatusInput(ServiceOrderStatus status, String motivo, String textoPublico,
+                              String textoInterno, Long expectedVersion) {}
+    public record UpdateInput(String textoPublico, String textoInterno,
+                              boolean publicada, Long expectedVersion) {}
 }
