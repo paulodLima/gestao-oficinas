@@ -42,7 +42,8 @@
           <p class="step">02 / DETALHE</p><div class="detail-heading"><h2>{{ formatNumber(order.numero) }}</h2><span class="status">{{ statusLabel(order.status) }}</span></div>
           <div class="vehicle"><span class="plate">{{ formatPlate(order.placa) }}</span><div><strong>{{ order.veiculo }}</strong><small>{{ order.clienteNome }}</small></div></div>
           <dl><div><dt>Entrada</dt><dd>{{ formatDate(order.entradaEm) }}</dd></div><div><dt>Quilometragem</dt><dd>{{ order.kmEntrada.toLocaleString('pt-BR') }} km</dd></div>
-            <div><dt>Previsão inicial</dt><dd>{{ formatDate(order.previsaoEm) }}</dd></div></dl>
+            <div><dt>Previsão atual</dt><dd>{{ formatDate(order.previsaoEm) }}</dd></div></dl>
+          <p class="badge deadline-state" [class.late]="order.atrasada" [class.ready]="order.aguardandoRetirada">{{ deadlineLabel(order) }}</p>
           <h3>Relato de entrada</h3><p class="report">{{ order.relatoInicial }}</p>
           <section class="workflow" aria-labelledby="workflow-title">
             <div class="subheading"><div><p class="step">03 / FLUXO</p><h3 id="workflow-title">Atualizar etapa</h3></div>
@@ -81,8 +82,36 @@
             </form>
           </section>
 
+          <section class="workflow timeline" aria-labelledby="forecast-title">
+            <div class="subheading"><div><p class="step">05 / PRAZO</p><h3 id="forecast-title">Revisar previsão</h3></div>
+              <span class="version">estimativa</span></div>
+            <p class="hint">Toda alteração fica no histórico público, inclusive quando ainda não houver uma nova data.</p>
+            <form [formGroup]="forecastForm" (ngSubmit)="updateForecast()">
+              <fieldset [disabled]="busy()">
+                <label for="forecast-new">Nova previsão</label>
+                <input id="forecast-new" type="datetime-local" formControlName="previsaoEm" [readOnly]="forecastForm.controls.semPrevisao.value">
+                <label class="check"><input type="checkbox" formControlName="semPrevisao"> Ainda sem nova previsão</label>
+                <label for="forecast-reason">Motivo público *</label>
+                <input id="forecast-reason" formControlName="motivoPublico" maxlength="1000" list="forecast-reasons" placeholder="Ex.: chegada de peça">
+                <datalist id="forecast-reasons"><option value="Aguardando autorização"></option><option value="Chegada de peça"></option><option value="Peça incompatível"></option><option value="Atraso do fornecedor"></option><option value="Adicional encontrado"></option><option value="Testes adicionais"></option></datalist>
+                <label for="forecast-action">Próxima ação *</label>
+                <textarea id="forecast-action" formControlName="proximaAcao" rows="2" maxlength="1000" placeholder="Ex.: confirmar a entrega da peça com o fornecedor."></textarea>
+                <button type="submit" class="primary full">{{ busy() ? 'Salvando…' : 'Atualizar previsão' }}</button>
+              </fieldset>
+            </form>
+            @if (forecasts().length) {
+              <ol class="forecast-history">
+                @for (forecast of forecasts(); track forecast.id) {
+                  <li><span class="timeline-mark" aria-hidden="true"></span><article><strong>{{ formatDate(forecast.previsaoAnterior) }} → {{ formatDate(forecast.previsaoNova) }}</strong>
+                    <small>{{ formatDate(forecast.createdAt) }} · {{ forecast.autorNome }}</small>
+                    <p><b>Motivo:</b> {{ forecast.motivoPublico }}</p><p><b>Próxima ação:</b> {{ forecast.proximaAcao }}</p></article></li>
+                }
+              </ol>
+            }
+          </section>
+
           <section class="timeline" aria-labelledby="timeline-title">
-            <p class="step">05 / HISTÓRICO</p><h3 id="timeline-title">Linha do tempo</h3>
+            <p class="step">06 / HISTÓRICO</p><h3 id="timeline-title">Linha do tempo</h3>
             @if (!timeline().length) { <p class="hint">Nenhum evento registrado.</p> }
             <ol>
               @for (event of timeline(); track event.id) {

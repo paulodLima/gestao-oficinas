@@ -3,7 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderEvent, ServiceOrderInput, ServiceOrderService,
+import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService,
   ServiceOrderStatus } from './service-order.service';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
@@ -30,6 +30,7 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly vehicles = signal<Vehicle[]>([]);
   readonly selected = signal<ServiceOrder | null>(null);
   readonly timeline = signal<ServiceOrderEvent[]>([]);
+  readonly forecasts = signal<ServiceOrderForecast[]>([]);
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal('');
@@ -60,6 +61,12 @@ export class ServiceOrderPageComponent implements OnInit {
     textoInterno: ['', Validators.maxLength(2000)],
     publicada: [false]
   });
+  readonly forecastForm = this.builder.nonNullable.group({
+    previsaoEm: [''],
+    semPrevisao: [false],
+    motivoPublico: ['', [Validators.required, Validators.maxLength(1000)]],
+    proximaAcao: ['', [Validators.required, Validators.maxLength(1000)]]
+  });
 
   ngOnInit() { void this.load(); }
   async load() {
@@ -71,12 +78,12 @@ export class ServiceOrderPageComponent implements OnInit {
       this.orders.set(orders.items); this.customers.set(customers.items); this.vehicles.set(vehicles.items);
       const first = orders.items[0] ?? null;
       this.selected.set(first);
-      if (first) await this.loadTimeline(first.id);
+      if (first) await this.loadHistory(first.id);
     } catch (error) { this.showError(error, 'Não foi possível carregar as ordens de serviço.'); }
     finally { this.loading.set(false); }
   }
   newOrder() {
-    this.selected.set(null); this.timeline.set([]); this.clearMessages();
+    this.selected.set(null); this.timeline.set([]); this.forecasts.set([]); this.clearMessages();
     this.form.reset({ clienteId: '', veiculoId: '', relatoInicial: '',
       entradaEm: this.localDateTime(new Date()), kmEntrada: '', previsaoEm: '' });
   }
@@ -94,7 +101,7 @@ export class ServiceOrderPageComponent implements OnInit {
   async selectOrder(order: ServiceOrder) {
     await this.perform(async () => {
       const detail = await this.service.order(order.id);
-      this.selected.set(detail); this.resetWorkflowForms(); await this.loadTimeline(detail.id);
+      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id);
     }, 'Detalhes atualizados.');
   }
   async createOrder() {
@@ -109,7 +116,7 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const opened = await this.service.create(input);
       this.orders.update(items => [opened, ...items]); this.selected.set(opened);
-      this.resetWorkflowForms(); await this.loadTimeline(opened.id);
+      this.resetWorkflowForms(); await this.loadHistory(opened.id);
     }, 'Ordem de serviço aberta com sucesso.');
   }
   async changeStatus() {
@@ -124,7 +131,7 @@ export class ServiceOrderPageComponent implements OnInit {
       const updated = await this.service.changeStatus(order.id, { ...value,
         status: value.status as ServiceOrderStatus, expectedVersion: order.versao });
       this.replaceOrder(updated); this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });
-      await this.loadTimeline(order.id);
+      await this.loadHistory(order.id);
     }, 'Etapa atualizada e registrada na linha do tempo.');
   }
   async publishUpdate() {
@@ -141,8 +148,27 @@ export class ServiceOrderPageComponent implements OnInit {
       await this.service.publish(order.id, { ...value, expectedVersion: order.versao });
       const updated = await this.service.order(order.id);
       this.replaceOrder(updated); this.updateForm.reset({ textoPublico: '', textoInterno: '', publicada: false });
-      await this.loadTimeline(order.id);
+      await this.loadHistory(order.id);
     }, value.publicada ? 'Atualização publicada na linha do tempo.' : 'Observação interna registrada.');
+  }
+  async updateForecast() {
+    const order = this.selected();
+    this.forecastForm.markAllAsTouched(); this.clearMessages();
+    const value = this.forecastForm.getRawValue();
+    if (!order || this.forecastForm.invalid || (!value.semPrevisao && !value.previsaoEm)) {
+      this.error.set('Informe a nova previsão ou marque a opção sem nova previsão.'); return;
+    }
+    await this.perform(async () => {
+      const updated = await this.service.updateForecast(order.id, {
+        previsao: value.semPrevisao ? null : new Date(value.previsaoEm).toISOString(),
+        motivoPublico: value.motivoPublico, proximaAcao: value.proximaAcao,
+        expectedVersion: order.versao
+      });
+      this.replaceOrder(updated); this.forecastForm.reset({
+        previsaoEm: '', semPrevisao: false, motivoPublico: '', proximaAcao: ''
+      });
+      await this.loadHistory(order.id);
+    }, 'Previsão atualizada e registrada no histórico.');
   }
   requiresReason() {
     const current = this.selected()?.status;
@@ -167,7 +193,16 @@ export class ServiceOrderPageComponent implements OnInit {
   statusLabel(value: ServiceOrderStatus) {
     return value.toLowerCase().replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
   }
-  private async loadTimeline(id: string) { this.timeline.set(await this.service.timeline(id)); }
+  deadlineLabel(order: ServiceOrder) {
+    if (order.aguardandoRetirada) return 'Pronto · aguardando retirada';
+    if (order.atrasada) return 'Previsão ultrapassada';
+    if (order.previsaoEm) return 'Dentro da previsão';
+    return 'Sem previsão';
+  }
+  private async loadHistory(id: string) {
+    const [timeline, forecasts] = await Promise.all([this.service.timeline(id), this.service.forecasts(id)]);
+    this.timeline.set(timeline); this.forecasts.set(forecasts);
+  }
   private replaceOrder(order: ServiceOrder) {
     this.selected.set(order);
     this.orders.update(items => items.map(item => item.id === order.id ? order : item));
@@ -175,6 +210,7 @@ export class ServiceOrderPageComponent implements OnInit {
   private resetWorkflowForms() {
     this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });
     this.updateForm.reset({ textoPublico: '', textoInterno: '', publicada: false });
+    this.forecastForm.reset({ previsaoEm: '', semPrevisao: false, motivoPublico: '', proximaAcao: '' });
   }
   private localDateTime(value: Date) {
     const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);

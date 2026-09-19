@@ -7,6 +7,7 @@ import java.security.MessageDigest;
 import java.time.*;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,14 @@ public class ServiceOrderService {
     public List<PublicServiceOrderEvent> publicTimeline(Identidade owner, UUID id) {
         repository.order(owner.oficinaId(), id);
         return repository.publicTimeline(owner.oficinaId(), id);
+    }
+    public List<ServiceOrderForecast> forecasts(Identidade owner, UUID id) {
+        repository.order(owner.oficinaId(), id);
+        return repository.forecasts(owner.oficinaId(), id);
+    }
+    public List<PublicServiceOrderForecast> publicForecasts(Identidade owner, UUID id) {
+        repository.order(owner.oficinaId(), id);
+        return repository.publicForecasts(owner.oficinaId(), id);
     }
 
     @Transactional
@@ -101,6 +110,29 @@ public class ServiceOrderService {
             new ServiceOrderRepository.UpdateData(publicText, internalText, input.publicada(), input.expectedVersion()));
     }
 
+    @Transactional
+    public ServiceOrder updateForecast(Identidade owner, UUID id, ForecastInput input) {
+        if (input == null || input.expectedVersion() == null) {
+            throw invalid("Informe a versão atual da ordem.");
+        }
+        ServiceOrder current = repository.order(owner.oficinaId(), id);
+        requireVersion(current, input.expectedVersion());
+        if (!current.status().active()) {
+            throw new ApiException(409, "ORDEM_ENCERRADA", "A ordem de serviço já foi encerrada.");
+        }
+        if (input.previsao() != null && input.previsao().isBefore(clock.instant())) {
+            throw invalid("A nova previsão não pode estar no passado.");
+        }
+        if (Objects.equals(current.previsaoEm(), input.previsao())) {
+            throw invalid("Informe uma previsão diferente da atual.");
+        }
+        String reason = requiredText(input.motivoPublico(), 1000, "Informe o motivo público da alteração.");
+        String nextAction = requiredText(input.proximaAcao(), 1000, "Informe a próxima ação.");
+        var change = new ServiceOrderRepository.ForecastChange(owner.oficinaId(), owner.id(), id,
+            current.previsaoEm(), input.previsao(), reason, nextAction, input.expectedVersion());
+        return repository.updateForecast(change);
+    }
+
     private String query(String value) {
         String result = value == null ? "" : value.strip();
         if (result.length() > 100) throw invalid("A busca deve ter até 100 caracteres.");
@@ -113,6 +145,11 @@ public class ServiceOrderService {
         String result = value == null ? "" : value.strip();
         if (result.length() > maximum) throw invalid(message);
         return result.isEmpty() ? null : result;
+    }
+    private String requiredText(String value, int maximum, String message) {
+        String result = text(value, maximum, message);
+        if (result == null) throw invalid(message);
+        return result;
     }
     private void requireVersion(ServiceOrder order, long expectedVersion) {
         if (order.versao() != expectedVersion) {
@@ -135,4 +172,6 @@ public class ServiceOrderService {
                               String textoInterno, Long expectedVersion) {}
     public record UpdateInput(String textoPublico, String textoInterno,
                               boolean publicada, Long expectedVersion) {}
+    public record ForecastInput(Instant previsao, String motivoPublico,
+                                String proximaAcao, Long expectedVersion) {}
 }

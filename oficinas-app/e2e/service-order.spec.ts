@@ -46,7 +46,7 @@ test('abre, localiza e consulta uma ordem de serviço', async ({ page }, info) =
   await page.getByLabel('Nova etapa *').selectOption('EM_DIAGNOSTICO');
   await page.getByRole('button', { name: 'Atualizar etapa' }).click();
   await expect(page.getByRole('alert')).toContainText('motivo');
-  await page.getByLabel(/Motivo/).fill('Sintoma reapareceu durante o teste.');
+  await page.locator('#status-reason').fill('Sintoma reapareceu durante o teste.');
   await page.getByLabel('Texto público opcional').fill('Retornamos ao diagnóstico para uma nova conferência.');
   await page.getByLabel('Observação interna opcional').fill('Rever fixação do agregado dianteiro.');
   await page.getByRole('button', { name: 'Atualizar etapa' }).click();
@@ -60,6 +60,24 @@ test('abre, localiza e consulta uma ordem de serviço', async ({ page }, info) =
   await expect(page.getByRole('status')).toContainText('publicada');
   await expect(page.getByText('Diagnóstico complementar iniciado.')).toBeVisible();
   await expect(page.getByText('Aguardar leitura do scanner.')).toBeVisible();
+
+  const forecast = new Date(Date.now() + 2 * 86_400_000);
+  const localForecast = new Date(forecast.getTime() - forecast.getTimezoneOffset() * 60_000)
+    .toISOString().slice(0, 16);
+  await page.locator('#forecast-new').fill(localForecast);
+  await page.getByLabel('Motivo público *').fill('Atraso do fornecedor');
+  await page.getByLabel('Próxima ação *').fill('Confirmar a entrega da peça com o fornecedor.');
+  await page.getByRole('button', { name: 'Atualizar previsão' }).click();
+  await expect(page.getByRole('status')).toContainText('Previsão atualizada');
+  await expect(page.locator('.forecast-history')).toContainText('Atraso do fornecedor');
+  await expect(page.getByText('Dentro da previsão')).toBeVisible();
+
+  await page.getByLabel('Ainda sem nova previsão').check();
+  await page.getByLabel('Motivo público *').fill('Peça incompatível');
+  await page.getByLabel('Próxima ação *').fill('Localizar fornecedor alternativo.');
+  await page.getByRole('button', { name: 'Atualizar previsão' }).click();
+  await expect(page.getByText('Sem previsão')).toBeVisible();
+  await expect(page.locator('.forecast-history')).toContainText('Localizar fornecedor alternativo.');
 
   await page.getByLabel('Buscar por OS, cliente ou placa').fill('BRA-1E23');
   await page.getByRole('button', { name: 'Buscar' }).click();

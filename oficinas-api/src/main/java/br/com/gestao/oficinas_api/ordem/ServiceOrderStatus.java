@@ -1,5 +1,7 @@
 package br.com.gestao.oficinas_api.ordem;
 
+import java.time.Instant;
+
 public enum ServiceOrderStatus {
     RECEBIDO(0, false),
     EM_DIAGNOSTICO(10, false),
@@ -28,6 +30,14 @@ public enum ServiceOrderStatus {
 
     public boolean requiresReasonFrom(ServiceOrderStatus current) {
         return sequence < current.sequence || waiting && current.executing();
+    }
+
+    public boolean isDelayed(Instant forecast, Instant reference) {
+        return forecast != null && forecast.isBefore(reference) && active() && this != PRONTO_PARA_RETIRADA;
+    }
+
+    public boolean awaitingPickup() {
+        return this == PRONTO_PARA_RETIRADA;
     }
 
     private boolean executing() {

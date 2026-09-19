@@ -55,6 +55,20 @@ public class ServiceOrderRepository {
             """, this::mapPublicEvent, shopId, orderId);
     }
 
+    public List<ServiceOrderForecast> forecasts(UUID shopId, UUID orderId) {
+        return jdbc.query(forecastSelect() + " WHERE f.oficina_id=? AND f.ordem_servico_id=?" +
+            " ORDER BY f.created_at DESC,f.id DESC", this::mapForecast, shopId, orderId);
+    }
+
+    public List<PublicServiceOrderForecast> publicForecasts(UUID shopId, UUID orderId) {
+        return jdbc.query("""
+            SELECT f.id,f.previsao_anterior,f.previsao_nova,f.motivo_publico,f.proxima_acao,f.created_at
+              FROM ordem_servico_previsao f
+             WHERE f.oficina_id=? AND f.ordem_servico_id=?
+             ORDER BY f.created_at DESC,f.id DESC
+            """, this::mapPublicForecast, shopId, orderId);
+    }
+
     public ServiceOrder create(UUID shopId, UUID ownerId, UUID idempotencyKey, String bodyHash, CreateData data) {
         ServiceOrder replay = replay(shopId, ownerId, idempotencyKey, bodyHash);
         if (replay != null) return replay;
@@ -123,6 +137,24 @@ public class ServiceOrderRepository {
         return event(shopId, eventId);
     }
 
+    public ServiceOrder updateForecast(ForecastChange data) {
+        int changed = jdbc.update("""
+            UPDATE ordem_servico SET previsao_em=?,versao=versao+1,updated_at=now()
+             WHERE oficina_id=? AND id=? AND versao=? AND encerrada_em IS NULL
+            """, timestamp(data.next()), data.shopId(), data.orderId(), data.expectedVersion());
+        if (changed != 1) throw staleOrder(data.shopId(), data.orderId());
+        jdbc.update("""
+            INSERT INTO ordem_servico_previsao(id,oficina_id,ordem_servico_id,previsao_anterior,
+              previsao_nova,motivo_publico,proxima_acao,autor_id)
+            VALUES (?,?,?,?,?,?,?,?)
+            """, UUID.randomUUID(), data.shopId(), data.orderId(), timestamp(data.previous()),
+            timestamp(data.next()), data.reason(), data.nextAction(), data.ownerId());
+        jdbc.update("INSERT INTO cadastro_auditoria(id,oficina_id,proprietario_id,recurso,recurso_id,acao) VALUES (?,?,?,?,?,?)",
+            UUID.randomUUID(), data.shopId(), data.ownerId(), "ORDEM_SERVICO", data.orderId(),
+            "PREVISAO_ALTERADA");
+        return order(data.shopId(), data.orderId());
+    }
+
     private ServiceOrder replay(UUID shopId, UUID ownerId, UUID key, String bodyHash) {
         if (key == null) return null;
         jdbc.update("DELETE FROM requisicao_idempotente WHERE oficina_id=? AND proprietario_id=? AND operacao=? AND chave=? AND created_at < now() - interval '24 hours'",
@@ -169,10 +201,20 @@ public class ServiceOrderRepository {
             " FROM ordem_servico_evento e JOIN proprietario p ON p.id=e.autor_id AND p.oficina_id=e.oficina_id";
     }
 
+    private String forecastSelect() {
+        return "SELECT f.id,f.previsao_anterior,f.previsao_nova,f.motivo_publico,f.proxima_acao," +
+            "f.autor_id,p.nome autor_nome,f.created_at FROM ordem_servico_previsao f" +
+            " JOIN proprietario p ON p.id=f.autor_id AND p.oficina_id=f.oficina_id";
+    }
+
     private String select() {
         return "SELECT os.id,os.numero,os.cliente_id,c.nome cliente_nome,os.veiculo_id,v.placa," +
             "concat_ws(' ',v.marca,v.modelo) veiculo,os.relato_inicial,os.entrada_em,os.km_entrada," +
-            "os.status,os.previsao_em,os.versao,os.created_at" + joins();
+            "os.status,os.previsao_em," +
+            "(os.previsao_em IS NOT NULL AND os.previsao_em < now() AND os.status NOT IN" +
+            " ('PRONTO_PARA_RETIRADA','ENTREGUE','CANCELADO')) atrasada," +
+            "(os.status='PRONTO_PARA_RETIRADA') aguardando_retirada," +
+            "os.versao,os.created_at,os.updated_at" + joins();
     }
     private String joins() {
         return " FROM ordem_servico os JOIN cliente c ON c.oficina_id=os.oficina_id AND c.id=os.cliente_id" +
@@ -184,7 +226,8 @@ public class ServiceOrderRepository {
             rs.getObject("veiculo_id", UUID.class), rs.getString("placa"), rs.getString("veiculo"),
             rs.getString("relato_inicial"), rs.getTimestamp("entrada_em").toInstant(), rs.getInt("km_entrada"),
             ServiceOrderStatus.valueOf(rs.getString("status")), instant(rs.getTimestamp("previsao_em")),
-            rs.getLong("versao"), rs.getTimestamp("created_at").toInstant());
+            rs.getBoolean("atrasada"), rs.getBoolean("aguardando_retirada"), rs.getLong("versao"),
+            rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
     }
     private ServiceOrderEvent mapEvent(ResultSet rs, int row) throws SQLException {
         return new ServiceOrderEvent(rs.getObject("id", UUID.class), rs.getString("tipo"),
@@ -197,6 +240,19 @@ public class ServiceOrderRepository {
         return new PublicServiceOrderEvent(rs.getObject("id", UUID.class), rs.getString("tipo"),
             status(rs.getString("status_anterior")), status(rs.getString("status_novo")),
             rs.getString("texto_publico"), rs.getString("autor_nome"), rs.getTimestamp("created_at").toInstant());
+    }
+    private ServiceOrderForecast mapForecast(ResultSet rs, int row) throws SQLException {
+        return new ServiceOrderForecast(rs.getObject("id", UUID.class),
+            instant(rs.getTimestamp("previsao_anterior")), instant(rs.getTimestamp("previsao_nova")),
+            rs.getString("motivo_publico"), rs.getString("proxima_acao"),
+            rs.getObject("autor_id", UUID.class), rs.getString("autor_nome"),
+            rs.getTimestamp("created_at").toInstant());
+    }
+    private PublicServiceOrderForecast mapPublicForecast(ResultSet rs, int row) throws SQLException {
+        return new PublicServiceOrderForecast(rs.getObject("id", UUID.class),
+            instant(rs.getTimestamp("previsao_anterior")), instant(rs.getTimestamp("previsao_nova")),
+            rs.getString("motivo_publico"), rs.getString("proxima_acao"),
+            rs.getTimestamp("created_at").toInstant());
     }
     private ApiException staleOrder(UUID shopId, UUID orderId) {
         ServiceOrder current = order(shopId, orderId);
@@ -219,6 +275,8 @@ public class ServiceOrderRepository {
                              String internalText, long expectedVersion) {}
     public record UpdateData(String publicText, String internalText, boolean published,
                              long expectedVersion) {}
+    public record ForecastChange(UUID shopId, UUID ownerId, UUID orderId, Instant previous,
+                                 Instant next, String reason, String nextAction, long expectedVersion) {}
     private record EventData(UUID shopId, UUID orderId, UUID ownerId, String type,
                              ServiceOrderStatus previous, ServiceOrderStatus next, String reason,
                              String publicText, String internalText, boolean published) {}

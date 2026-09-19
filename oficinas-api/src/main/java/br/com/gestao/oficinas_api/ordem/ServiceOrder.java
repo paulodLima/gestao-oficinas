@@ -7,4 +7,5 @@ public record ServiceOrder(UUID id, long numero, UUID clienteId, String clienteN
                            UUID veiculoId, String placa, String veiculo,
                            String relatoInicial, Instant entradaEm, int kmEntrada,
                            ServiceOrderStatus status, Instant previsaoEm,
-                           long versao, Instant createdAt) {}
+                           boolean atrasada, boolean aguardandoRetirada,
+                           long versao, Instant createdAt, Instant updatedAt) {}

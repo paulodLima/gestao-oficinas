@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderEvent, ServiceOrderService } from './service-order.service';
+import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderService } from './service-order.service';
 import { ServiceOrderPageComponent } from './service-order-page.component';
 
 describe('Ordens de serviço', () => {
@@ -13,20 +13,27 @@ describe('Ordens de serviço', () => {
   const order: ServiceOrder = { id: 'o1', numero: 1, clienteId: 'c1', clienteNome: 'Ana Souza',
     veiculoId: 'v1', placa: 'BRA1E23', veiculo: 'Volkswagen T-Cross',
     relatoInicial: 'Ruído na suspensão dianteira.', entradaEm: '2026-09-19T10:00:00Z',
-    kmEntrada: 48210, status: 'RECEBIDO', previsaoEm: null, versao: 0, createdAt: '2026-09-19T10:00:00Z' };
+    kmEntrada: 48210, status: 'RECEBIDO', previsaoEm: null, atrasada: false,
+    aguardandoRetirada: false, versao: 0, createdAt: '2026-09-19T10:00:00Z',
+    updatedAt: '2026-09-19T10:00:00Z' };
   const event: ServiceOrderEvent = { id: 'e1', tipo: 'STATUS', statusAnterior: null,
     statusNovo: 'RECEBIDO', motivo: null, textoPublico: null, textoInterno: null,
     publicada: false, autorId: 'p1', autorNome: 'Dono', createdAt: '2026-09-19T10:00:00Z' };
+  const forecast: ServiceOrderForecast = { id: 'f1', previsaoAnterior: null,
+    previsaoNova: '2026-09-20T18:00:00Z', motivoPublico: 'Aguardando peça',
+    proximaAcao: 'Confirmar entrega.', autorId: 'p1', autorNome: 'Dono',
+    createdAt: '2026-09-19T11:00:00Z' };
   let service: jasmine.SpyObj<ServiceOrderService>;
   let registrations: jasmine.SpyObj<CustomerVehicleService>;
 
   beforeEach(() => {
     service = jasmine.createSpyObj<ServiceOrderService>('ServiceOrderService',
-      ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish']);
+      ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish', 'forecasts', 'updateForecast']);
     registrations = jasmine.createSpyObj<CustomerVehicleService>('CustomerVehicleService', ['customers', 'vehicles']);
     service.orders.and.resolveTo({ items: [order], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     service.order.and.resolveTo(order);
     service.timeline.and.resolveTo([event]);
+    service.forecasts.and.resolveTo([forecast]);
     registrations.customers.and.resolveTo({ items: [customer], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     registrations.vehicles.and.resolveTo({ items: [vehicle], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     TestBed.configureTestingModule({ imports: [ServiceOrderPageComponent], providers: [provideRouter([]),
@@ -40,6 +47,7 @@ describe('Ordens de serviço', () => {
     expect(component.selected()).toEqual(order);
     expect(component.activeCount()).toBe(1);
     expect(component.timeline()).toEqual([event]);
+    expect(component.forecasts()).toEqual([forecast]);
   });
 
   it('impede abertura com relato e quilometragem inválidos', async () => {
@@ -106,5 +114,35 @@ describe('Ordens de serviço', () => {
       textoPublico: 'Diagnóstico iniciado.', textoInterno: 'Conferir agregado.', expectedVersion: 0
     }));
     expect(service.order).toHaveBeenCalledWith('o1');
+  });
+
+  it('atualiza a previsão com motivo, próxima ação e versão', async () => {
+    const updated = { ...order, previsaoEm: '2026-09-21T18:00:00Z', versao: 1 };
+    service.updateForecast.and.resolveTo(updated);
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.forecastForm.setValue({ previsaoEm: '2026-09-21T15:00',
+      semPrevisao: false, motivoPublico: 'Atraso do fornecedor', proximaAcao: 'Cobrar nova posição.' });
+    await component.updateForecast();
+    expect(service.updateForecast).toHaveBeenCalledWith('o1', jasmine.objectContaining({
+      motivoPublico: 'Atraso do fornecedor', proximaAcao: 'Cobrar nova posição.', expectedVersion: 0
+    }));
+    expect(component.selected()).toEqual(updated);
+  });
+
+  it('permite registrar ausência de nova previsão', async () => {
+    const current = { ...order, previsaoEm: '2026-09-20T18:00:00Z' };
+    service.orders.and.resolveTo({ items: [current], page: 0, size: 100, totalElements: 1, totalPages: 1 });
+    service.updateForecast.and.resolveTo({ ...current, previsaoEm: null, versao: 1 });
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.forecastForm.setValue({ previsaoEm: '', semPrevisao: true,
+      motivoPublico: 'Peça incompatível', proximaAcao: 'Localizar fornecedor alternativo.' });
+    await component.updateForecast();
+    expect(service.updateForecast).toHaveBeenCalledWith('o1', jasmine.objectContaining({ previsao: null }));
+  });
+
+  it('diferencia atraso de espera para retirada', () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    expect(component.deadlineLabel({ ...order, atrasada: true })).toContain('ultrapassada');
+    expect(component.deadlineLabel({ ...order, aguardandoRetirada: true })).toContain('retirada');
   });
 });

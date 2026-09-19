@@ -32,7 +32,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
 - [ ] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
 - [ ] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
-- [ ] 12.0 Previsão de conclusão e atrasos — [Trello](https://trello.com/c/eE1TpMrV)
+- [x] 12.0 Previsão de conclusão e atrasos — [Trello](https://trello.com/c/eE1TpMrV)
 - [ ] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
 - [ ] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
 - [ ] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
@@ -489,10 +489,10 @@ Estimativa opcional e histórico de alterações com motivos e próxima ação.
 
 ## Subtarefas
 
-- [ ] 12.1 Criar atualização da estimativa com data anterior/nova, motivo e autor.
-- [ ] 12.2 Implementar classificação de atraso excluindo prontos, entregues e cancelados.
-- [ ] 12.3 Criar interface de motivo público/próxima ação, incluindo ausência de nova previsão.
-- [ ] 12.4 Testes unitários: limite de data/fuso e status; integração: histórico imutável e projeção pública sem dados internos.
+- [x] 12.1 Criar atualização da estimativa com data anterior/nova, motivo e autor.
+- [x] 12.2 Implementar classificação de atraso excluindo prontos, entregues e cancelados.
+- [x] 12.3 Criar interface de motivo público/próxima ação, incluindo ausência de nova previsão.
+- [x] 12.4 Testes unitários: limite de data/fuso e status; integração: histórico imutável e projeção pública sem dados internos.
 
 ## Critérios de aceite
 
@@ -505,7 +505,7 @@ Estimativa opcional e histórico de alterações com motivos e próxima ação.
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída em 19/09/2026, com evidências em `docs/task-12-validacao.md`.
 
 ---
 
