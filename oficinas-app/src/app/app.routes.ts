@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
+  { path: 'painel', canActivate: [authGuard], loadComponent: () => import('./painel/dashboard.component').then(m => m.DashboardComponent) },
   { path: 'configuracoes/oficina', canActivate: [authGuard], loadComponent: () => import('./oficina/shop-page.component').then(m => m.ShopPageComponent) },
   { path: 'clientes-veiculos', canActivate: [authGuard], loadComponent: () => import('./cadastro/customer-vehicle-page.component').then(m => m.CustomerVehiclePageComponent) },
   { path: 'ordens-servico', canActivate: [authGuard], loadComponent: () => import('./ordem/service-order-page.component').then(m => m.ServiceOrderPageComponent) },

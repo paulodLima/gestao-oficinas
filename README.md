@@ -230,6 +230,23 @@ npm run test:e2e
 
 Os testes Angular usam Chrome instalado; se necessário, configure `CHROME_BIN` com o caminho de um Chromium headless. Os E2E exigem o Compose rodando nas portas padrão (4200/8025), criam contas sintéticas `@example.test` e deixam mensagens no Mailpit. Capturas ficam em `oficinas-app/test-results`, ignoradas pelo Git.
 
+## Painel operacional e previsões
+
+Após entrar, abra **Painel operacional e Kanban** na tela inicial ou acesse `/painel`.
+O painel mostra ordens ativas, atrasadas, aguardando aprovação/peças e prontas para retirada.
+Os indicadores representam toda a oficina; os filtros afetam os cartões, com 20 ordens por página.
+Lista e Kanban usam a mesma seleção. No celular, a lista é a visualização inicial.
+
+Busque por placa, cliente ou número da OS e filtre por etapa, situação, tempo sem atualização
+ou tempo na etapa. Clique no número para abrir os detalhes e alterar a etapa. Não há arrastar
+cartões: justificativas e histórico são registrados no detalhe. Use **Atualizar** para consultar
+novamente; o painel informa o instante da consulta e não faz atualização em tempo real.
+
+No detalhe, **Previsão de conclusão** permite informar ou remover uma estimativa, sempre com
+motivo público e próxima ação. O histórico é preservado. Datas usam o fuso da oficina.
+Prontas para retirada e ordens sem previsão não contam como atraso de execução.
+Integração do cliente e notificações de mudança de prazo ficam para as respectivas tarefas.
+
 ## Antes de publicar em produção
 
 O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banco privado com credenciais próprias e SMTP externo configurado (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `PUBLIC_URL`). Defina também um `CODE_SECRET` aleatório e exclusivo, com ao menos 24 caracteres, para o HMAC dos códigos de cliente. O perfil exige cookie Secure e URL pública HTTPS. SMTP externo e domínio remetente ainda não foram validados.

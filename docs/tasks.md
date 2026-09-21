@@ -27,7 +27,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 4.0 Cadastro de clientes e veículos — [Trello](https://trello.com/c/mMMZ4IFR)
 - [x] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
 - [x] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
-- [ ] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
+- [x] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
 - [ ] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
 - [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
 - [ ] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
@@ -296,10 +296,10 @@ Quadro e lista de OS com filtros de situação, última atualização e tempo na
 
 ## Subtarefas
 
-- [ ] 7.1 Implementar consultas de indicadores e filtros usando status e previsão.
-- [ ] 7.2 Exibir cartões com última atualização e tempo na etapa, sem percentual artificial.
-- [ ] 7.3 Criar Kanban e alternativa de lista para celular.
-- [ ] 7.4 Testes unitários: agrupamento e indicadores; integração: filtros isolados por oficina; E2E: mesma OS e status na lista e quadro.
+- [x] 7.1 Implementar consultas de indicadores e filtros usando status e previsão.
+- [x] 7.2 Exibir cartões com última atualização e tempo na etapa, sem percentual artificial.
+- [x] 7.3 Criar Kanban e alternativa de lista para celular.
+- [x] 7.4 Testes unitários: agrupamento e indicadores; integração: filtros isolados por oficina; E2E: mesma OS e status na lista e quadro.
 
 ## Critérios de aceite
 
@@ -311,7 +311,7 @@ Quadro e lista de OS com filtros de situação, última atualização e tempo na
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Concluída em 21/09/2026. Evidências em [task-7-validacao.md](task-7-validacao.md) e revisão em [7_task_review.md](7_task_review.md).
 
 ---
 

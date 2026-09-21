@@ -9,7 +9,7 @@ import { AuthService } from './auth.service';
   template: `<main><header><a class="brand" href="/inicio">/ gestão oficinas</a><button (click)="logout()" [disabled]="busy()">Sair da conta</button></header>
     <section><p class="eyebrow">SUA OFICINA</p><h1>{{ auth.owner()?.oficina?.nome }}</h1>
     <p>Bem-vindo, {{ auth.owner()?.nome }}.</p>
-    <nav aria-label="Recursos da oficina"><a routerLink="/configuracoes/oficina">Configurar dados e logo da oficina</a><a routerLink="/clientes-veiculos">Cadastrar clientes e veículos</a><a routerLink="/ordens-servico">Abrir e consultar ordens de serviço</a></nav>
+    <nav aria-label="Recursos da oficina"><a routerLink="/painel">Painel operacional e Kanban</a><a routerLink="/configuracoes/oficina">Configurar dados e logo da oficina</a><a routerLink="/clientes-veiculos">Cadastrar clientes e veículos</a><a routerLink="/ordens-servico">Abrir e consultar ordens de serviço</a></nav>
     <div class="ready"><span aria-hidden="true">✓</span><div><h2>Operação pronta para receber veículos.</h2><p>Organize os cadastros e abra cada atendimento com responsável, quilometragem e relato de entrada preservados.</p></div></div>
     @if(error()){<p role="alert">{{ error() }}</p>}
     <p class="account">Conectado como {{ auth.owner()?.email }}</p></section></main>`,

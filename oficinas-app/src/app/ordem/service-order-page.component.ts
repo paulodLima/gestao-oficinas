@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
 import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService,
   ServiceOrderStatus } from './service-order.service';
@@ -23,6 +23,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
 })
 export class ServiceOrderPageComponent implements OnInit {
   private readonly service = inject(ServiceOrderService);
+  private readonly route = inject(ActivatedRoute);
   private readonly registrations = inject(CustomerVehicleService);
   private readonly builder = inject(FormBuilder);
   readonly orders = signal<ServiceOrder[]>([]);
@@ -76,7 +77,8 @@ export class ServiceOrderPageComponent implements OnInit {
         this.service.orders(), this.registrations.customers(), this.registrations.vehicles()
       ]);
       this.orders.set(orders.items); this.customers.set(customers.items); this.vehicles.set(vehicles.items);
-      const first = orders.items[0] ?? null;
+      const requestedId = this.route.snapshot.queryParamMap.get('id');
+      const first = requestedId ? await this.service.order(requestedId) : orders.items[0] ?? null;
       this.selected.set(first);
       if (first) await this.loadHistory(first.id);
     } catch (error) { this.showError(error, 'Não foi possível carregar as ordens de serviço.'); }
@@ -96,6 +98,8 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const result = await this.service.orders(this.search.value);
       this.orders.set(result.items); this.selected.set(result.items[0] ?? null);
+      this.resetWorkflowForms(); this.timeline.set([]); this.forecasts.set([]);
+      if (this.selected()) await this.loadHistory(this.selected()!.id);
     }, 'Busca atualizada.');
   }
   async selectOrder(order: ServiceOrder) {

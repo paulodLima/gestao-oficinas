@@ -252,6 +252,28 @@ Problema e justificativa são obrigatórios no envio de adicionais. fotoIds deve
 
 Vistoria tem uma versão rascunho editável; confirmação congela checklist e referências às fotos. Correção adiciona versão com motivo; a política de visibilidade atual ainda governa fotos, inclusive versões anteriores. Auditoria não é galeria pública.
 
+### Implementação das tarefas 12 e 7
+
+`GET /api/ordens-servico/{id}/previsao` retorna previsão, motivo, próxima ação, atraso,
+versão, fuso e instante de referência. `POST` no mesmo caminho recebe `previsao` com offset
+(ou null), `motivoPublico`, `proximaAcao` e `expectedVersion`. Alteração bloqueia a OS,
+valida versão/estado e grava prazo, histórico e auditoria na mesma transação.
+`GET /historico?page=0&size=10` é paginado; V7 impede UPDATE/DELETE do histórico no banco.
+Esses endpoints exigem proprietário; projeção para o portal será integrada nas tarefas 10/11.
+
+`GET /api/painel` exige proprietário e retorna `indicadores`, `ordens` paginadas, `fuso`
+e `verificadoEm`. Indicadores globais não são afetados por filtros dos cartões. Parâmetros:
+`q`, `status`, `situacao` (ATIVAS/ATRASADAS/APROVACAO/PECAS/PRONTAS), `sort`
+(ATUALIZACAO/ETAPA/PREVISAO), `semAtualizacaoHoras`, `minHorasEtapa`, `page` e `size`.
+Padrão 20 e máximo 100 itens; limites de tempo entre 0 e 87600 horas. Todos os dados são
+filtrados pela oficina da sessão; instantâneo usa REPEATABLE_READ e relógio compartilhado.
+
+Tempo na etapa deriva do último evento STATUS, não de atualização de texto ou previsão.
+Última atualização usa `ordem_servico.updated_at`. V8 adiciona índices das consultas.
+Lista/Kanban agrupam a mesma página, sem percentual de progresso. Filtros aplicados ficam na
+URL, separados do rascunho; alternar visualização não aplica campos em edição. Atualização
+é manual. Detalhe aceita `?id=` e consulta a OS diretamente, inclusive fora da primeira página.
+
 ## 7. Fotos e armazenamento
 
 Limites iniciais configuráveis: 10 MiB por foto, 40 megapixels decodificados, 20 arquivos por seleção; upload individual com concorrência máxima 3. JPEG, PNG e WebP aceitos pelo servidor. HEIC/HEIF não garantidos no MVP: explicar formato incompatível e oferecer captura em formato compatível/seleção de JPEG. Testar essa alternativa em iPhone; não prometer suporte irrestrito.

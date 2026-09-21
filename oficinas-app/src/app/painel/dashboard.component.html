@@ -1,0 +1,65 @@
+<header class="topbar"><a routerLink="/inicio" class="brand">/ gestão oficinas</a>
+  <nav aria-label="Navegação da oficina"><a routerLink="/ordens-servico">Ordens de serviço</a><a routerLink="/inicio">Início</a></nav></header>
+<main>
+  <section class="hero"><div><p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p><h1>O ritmo da oficina.</h1>
+    <p>Saiba o que está em andamento e onde sua atenção faz diferença.</p></div>
+    <a class="primary action" routerLink="/ordens-servico">Abrir ou consultar uma OS <span aria-hidden="true">↗</span></a></section>
+  @if(snapshot(); as data) {
+    <section class="metrics" aria-label="Indicadores de toda a oficina">
+      @for(metric of metrics; track metric.key) {
+        <button type="button" [class.selected]="filters.controls.situacao.value === metric.situation"
+          [attr.aria-pressed]="filters.controls.situacao.value === metric.situation" (click)="choose(metric.situation)" [disabled]="loading()">
+          <strong>{{ data.indicadores[metric.key] }}</strong><span>{{ metric.label }}</span></button>
+      }
+    </section>
+    <p class="scope">Indicadores de toda a oficina, antes dos filtros. Prontas continuam ativas, mas não são atraso de execução.</p>
+  }
+  <form class="filters" [formGroup]="filters" (ngSubmit)="apply()" aria-label="Filtros do painel">
+    <div class="search"><label for="dashboard-search">Buscar por placa, cliente ou OS</label><input id="dashboard-search" formControlName="q" maxlength="100" placeholder="BRA-1E23, Ana ou OS-12"></div>
+    <div><label for="dashboard-situation">Situação</label><select id="dashboard-situation" formControlName="situacao">
+      @for(metric of metrics; track metric.key){<option [value]="metric.situation">{{ metric.label }}</option>}
+    </select></div>
+    <div><label for="dashboard-status">Etapa</label><select id="dashboard-status" formControlName="status"><option value="">Todas as etapas</option>
+      @for(stage of stages; track stage.value){<option [value]="stage.value">{{ stage.label }}</option>}
+    </select></div>
+    <div><label for="dashboard-stale">Sem atualização há</label><select id="dashboard-stale" formControlName="semAtualizacaoHoras">
+      <option value="0">Qualquer tempo</option><option value="24">24 horas ou mais</option><option value="48">48 horas ou mais</option><option value="168">7 dias ou mais</option>
+    </select></div>
+    <div><label for="dashboard-stage-age">Tempo na etapa</label><select id="dashboard-stage-age" formControlName="minHorasEtapa">
+      <option value="0">Qualquer tempo</option><option value="24">24 horas ou mais</option><option value="48">48 horas ou mais</option><option value="168">7 dias ou mais</option>
+    </select></div>
+    <div><label for="dashboard-sort">Ordenar por</label><select id="dashboard-sort" formControlName="sort">
+      <option value="ATUALIZACAO">Atualização mais recente</option><option value="ETAPA">Mais tempo na etapa</option><option value="PREVISAO">Previsão mais próxima</option>
+    </select></div>
+    <div class="filter-actions"><button type="submit" class="primary" [disabled]="loading()">Aplicar filtros</button><button type="button" (click)="clear()" [disabled]="loading()">Limpar</button></div>
+  </form>
+  <div class="viewbar"><h2>Atendimentos em andamento</h2><div class="view-actions" role="group" aria-label="Visualização">
+    <button type="button" (click)="changeView('lista')" [attr.aria-pressed]="view() === 'lista'">Lista</button>
+    <button type="button" (click)="changeView('quadro')" [attr.aria-pressed]="view() === 'quadro'">Quadro Kanban</button>
+    <button type="button" (click)="fetch()" [disabled]="loading()">Atualizar</button></div></div>
+  @if(loading()){<p role="status" class="notice">Carregando atendimentos…</p>}
+  @else if(error()){<div role="alert" class="notice error"><p>{{ error() }}</p><button type="button" (click)="fetch()">Tentar novamente</button></div>}
+  @else { @if(snapshot(); as data){
+    <p class="scope" role="status">{{ data.ordens.totalElements }} resultado(s) · exibindo {{ data.ordens.items.length }} nesta página.
+      Conferido em {{ verifiedAt() }} · {{ data.fuso }}. Use Atualizar para obter a situação atual.</p>
+    @if(!data.ordens.items.length){<section class="empty"><h3>Nenhum atendimento nesta busca.</h3><p>Limpe os filtros ou abra uma ordem de serviço para começar.</p>
+      <button type="button" (click)="clear()">Limpar filtros</button></section>}
+    @else if(view() === 'lista'){
+      <section class="list" aria-label="Lista de atendimentos">@for(card of data.ordens.items; track card.id){<app-dashboard-card [card]="card" [timezone]="data.fuso" />}</section>
+    } @else {
+      <p class="scope">Colunas mostram os cartões desta página. Abra a OS para alterar a etapa e registrar o motivo quando necessário.</p>
+      <section class="board" aria-label="Quadro Kanban" tabindex="0">
+        @for(column of columns(); track column.value){<section class="column" [attr.aria-label]="column.label">
+          <h3>{{ column.label }} <span>{{ column.cards.length }}</span></h3>
+          @for(card of column.cards; track card.id){<app-dashboard-card [card]="card" [timezone]="data.fuso" />}
+          @if(!column.cards.length){<p class="column-empty">Sem cartões nesta página</p>}
+        </section>}
+      </section>
+    }
+    @if(data.ordens.totalPages > 1){<nav class="pagination" aria-label="Páginas do painel">
+      <button type="button" (click)="changePage(page()-1)" [disabled]="page() === 0">Página anterior</button>
+      <span>Página {{ page()+1 }} de {{ data.ordens.totalPages }}</span>
+      <button type="button" (click)="changePage(page()+1)" [disabled]="page()+1 >= data.ordens.totalPages">Próxima página</button>
+    </nav>}
+  } }
+</main>
