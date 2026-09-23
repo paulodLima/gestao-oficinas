@@ -1,9 +1,9 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService,
+import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
   ServiceOrderStatus } from './service-order.service';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
@@ -32,6 +32,8 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly selected = signal<ServiceOrder | null>(null);
   readonly timeline = signal<ServiceOrderEvent[]>([]);
   readonly forecasts = signal<ServiceOrderForecast[]>([]);
+  readonly photos = signal<ServicePhoto[]>([]);
+  readonly uploads = signal<{ name: string; progress: number; error: string }[]>([]);
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal('');
@@ -80,7 +82,7 @@ export class ServiceOrderPageComponent implements OnInit {
       const requestedId = this.route.snapshot.queryParamMap.get('id');
       const first = requestedId ? await this.service.order(requestedId) : orders.items[0] ?? null;
       this.selected.set(first);
-      if (first) await this.loadHistory(first.id);
+      if (first) { await this.loadHistory(first.id); await this.loadPhotos(first.id); }
     } catch (error) { this.showError(error, 'Não foi possível carregar as ordens de serviço.'); }
     finally { this.loading.set(false); }
   }
@@ -99,13 +101,13 @@ export class ServiceOrderPageComponent implements OnInit {
       const result = await this.service.orders(this.search.value);
       this.orders.set(result.items); this.selected.set(result.items[0] ?? null);
       this.resetWorkflowForms(); this.timeline.set([]); this.forecasts.set([]);
-      if (this.selected()) await this.loadHistory(this.selected()!.id);
+      if (this.selected()) { await this.loadHistory(this.selected()!.id); await this.loadPhotos(this.selected()!.id); }
     }, 'Busca atualizada.');
   }
   async selectOrder(order: ServiceOrder) {
     await this.perform(async () => {
       const detail = await this.service.order(order.id);
-      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id);
+      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id);
     }, 'Detalhes atualizados.');
   }
   async createOrder() {
@@ -120,7 +122,7 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const opened = await this.service.create(input);
       this.orders.update(items => [opened, ...items]); this.selected.set(opened);
-      this.resetWorkflowForms(); await this.loadHistory(opened.id);
+      this.resetWorkflowForms(); await this.loadHistory(opened.id); await this.loadPhotos(opened.id);
     }, 'Ordem de serviço aberta com sucesso.');
   }
   async changeStatus() {
@@ -174,6 +176,25 @@ export class ServiceOrderPageComponent implements OnInit {
       await this.loadHistory(order.id);
     }, 'Previsão atualizada e registrada no histórico.');
   }
+  selectPhotos(event: Event) {
+    const order = this.selected(); const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []).slice(0, 20); input.value = '';
+    if (!order || !files.length) return;
+    if (files.some(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024)) { this.error.set('Selecione JPEG, PNG ou WebP de até 10 MiB por foto.'); return; }
+    this.uploads.set(files.map(file => ({ name: file.name, progress: 0, error: '' }))); void this.uploadQueue(order, files);
+  }
+  private async uploadQueue(order: ServiceOrder, files: File[]) {
+    let next = 0; const worker = async () => { while (next < files.length) await this.uploadOne(order, files[next++]); };
+    await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker)); await this.loadPhotos(order.id);
+  }
+  private async uploadOne(order: ServiceOrder, file: File) {
+    try { const request = await this.service.uploadPhoto(order.id, file, order.status, crypto.randomUUID()); await new Promise<void>((resolve, reject) => request.subscribe({
+      next: event => { if (event.type === HttpEventType.UploadProgress) this.setUpload(file.name, Math.round(100 * event.loaded / (event.total || file.size))); if (event.type === HttpEventType.Response) { this.setUpload(file.name, 100); resolve(); } },
+      error: error => { this.setUpload(file.name, 0, error?.error?.detail ?? 'Falha ao enviar.'); reject(error); }
+    })); } catch { /* falhas ficam visíveis sem reenviar fotos concluídas */ }
+  }
+  async removePhoto(photo: ServicePhoto) { const order = this.selected(); if (!order || !confirm('Remover esta foto do acompanhamento?')) return; await this.perform(async () => { await this.service.deletePhoto(order.id, photo.id); await this.loadPhotos(order.id); }, 'Foto removida e registrada na auditoria.'); }
+  photoUrl(photo: ServicePhoto) { const order = this.selected(); return order ? this.service.photoUrl(order.id, photo.id, photo.miniaturaDisponivel) : ''; }
   requiresReason() {
     const current = this.selected()?.status;
     const target = this.statusForm.controls.status.value as ServiceOrderStatus | '';
@@ -207,6 +228,11 @@ export class ServiceOrderPageComponent implements OnInit {
     const [timeline, forecasts] = await Promise.all([this.service.timeline(id), this.service.forecasts(id)]);
     this.timeline.set(timeline); this.forecasts.set(forecasts);
   }
+  private async loadPhotos(id: string) {
+    try { this.photos.set(await this.service.photos(id)); }
+    catch { this.photos.set([]); }
+  }
+  private setUpload(name: string, progress: number, error = '') { this.uploads.update(items => items.map(item => item.name === name ? { ...item, progress, error } : item)); }
   private replaceOrder(order: ServiceOrder) {
     this.selected.set(order);
     this.orders.update(items => items.map(item => item.id === order.id ? order : item));

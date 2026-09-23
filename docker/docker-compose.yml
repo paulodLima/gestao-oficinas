@@ -38,6 +38,7 @@ services:
       CODE_SECRET: ${CODE_SECRET:-development-only-secret-change-me}
       SERVER_PORT: 8080
       APP_AUTH_TRUSTED_PROXY_HOST: app
+      PHOTO_STORAGE_PATH: /data/photos
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
@@ -45,6 +46,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+    volumes:
+      - photo-data:/data/photos
     networks:
       - oficinas-network
     restart: unless-stopped
@@ -80,3 +83,4 @@ networks:
 
 volumes:
   postgres-data:
+  photo-data:

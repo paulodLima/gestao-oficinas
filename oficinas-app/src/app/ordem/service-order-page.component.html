@@ -125,6 +125,13 @@
               }
             </ol>
           </section>
+          <section class="workflow photos" aria-labelledby="photos-title">
+            <div class="subheading"><div><p class="step">06 / FOTOS</p><h3 id="photos-title">Acompanhamento visual</h3></div><span class="version">privado</span></div>
+            <p class="hint">Use a câmera ou a galeria. As fotos ficam privadas para a oficina.</p>
+            <label class="photo-picker" for="order-photos">Adicionar até 20 fotos<input id="order-photos" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple (change)="selectPhotos($event)"></label>
+            @if (uploads().length) { <ul class="upload-list">@for (upload of uploads(); track upload.name) { <li><span>{{ upload.name }}</span><progress [value]="upload.progress" max="100">{{ upload.progress }}%</progress>@if (upload.error) { <small class="field-error">{{ upload.error }}</small> }</li> }</ul> }
+            @if (photos().length) { <div class="photo-grid">@for (photo of photos(); track photo.id) { <figure><img [src]="photoUrl(photo)" [alt]="photo.legenda || 'Foto da etapa ' + statusLabel(photo.etapa)"><figcaption><span>{{ statusLabel(photo.etapa) }} · {{ formatDate(photo.createdAt) }}</span><button type="button" class="link-danger" (click)="removePhoto(photo)">Remover</button></figcaption></figure> }</div> } @else { <p class="hint">Nenhuma foto registrada nesta ordem.</p> }
+          </section>
           <button type="button" class="secondary full" (click)="newOrder()">Abrir outra ordem</button>
         } @else {
           <p class="step">02 / ABRIR</p><h2>Nova ordem de serviço</h2>

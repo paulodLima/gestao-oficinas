@@ -13,7 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 public class ApiErrors {
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     ResponseEntity<ProblemDetail> uploadSize(Exception e, HttpServletRequest request) {
-        return api(new ApiException(413,"LOGO_GRANDE","A logo deve ter até 2 MiB."),request);
+        return api(new ApiException(413,"ARQUIVO_GRANDE","O arquivo enviado ultrapassa o tamanho permitido."),request);
     }
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ProblemDetail> api(ApiException e, HttpServletRequest request) {

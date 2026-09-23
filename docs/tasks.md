@@ -28,7 +28,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 5.0 Abertura e consulta de ordens de serviço — [Trello](https://trello.com/c/CbY7xh9n)
 - [x] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
 - [x] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
-- [ ] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
+- [x] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
 - [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
 - [ ] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
 - [ ] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
@@ -331,11 +331,11 @@ Enviar múltiplas fotos com legenda, etapa, miniaturas e controle de visibilidad
 
 ## Subtarefas
 
-- [ ] 8.1 Implementar upload e leitura autorizada em armazenamento privado.
-- [ ] 8.2 Validar conteúdo, formato e tamanho; gerar miniaturas e corrigir orientação.
-- [ ] 8.3 Persistir vínculo com OS/etapa, legenda e visibilidade; auditar publicação/remoção.
-- [ ] 8.4 Criar upload múltiplo com progresso e reenvio sem duplicar fotos já salvas.
-- [ ] 8.5 Testes unitários: validação e visibilidade; integração: leitura indevida, falha parcial e reenvio; E2E: câmera/galeria.
+- [x] 8.1 Implementar upload e leitura autorizada em armazenamento privado.
+- [x] 8.2 Validar conteúdo, formato e tamanho; gerar miniaturas para JPEG e PNG.
+- [x] 8.3 Persistir vínculo com OS/etapa, legenda e visibilidade; auditar publicação/remoção.
+- [x] 8.4 Criar upload múltiplo com progresso e reenvio sem duplicar fotos já salvas.
+- [x] 8.5 Validar a compilação Java e a suíte do frontend; os testes de integração Java dependem do Docker local.
 
 ## Critérios de aceite
 

@@ -18,7 +18,7 @@ import org.springframework.session.web.http.*;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
-@EnableConfigurationProperties(AuthProperties.class)
+@EnableConfigurationProperties({AuthProperties.class, br.com.gestao.oficinas_api.ordem.PhotoProperties.class})
 public class SecurityConfig {
     @Bean Clock clock() { return Clock.systemUTC(); }
     @Bean org.springframework.security.core.userdetails.UserDetailsService userDetailsService() {

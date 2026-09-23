@@ -36,6 +36,10 @@ export interface ServiceOrderForecast {
 export interface ForecastInput {
   previsao: string | null; motivoPublico: string; proximaAcao: string; expectedVersion: number;
 }
+export interface ServicePhoto {
+  id: string; etapa: ServiceOrderStatus; legenda: string | null; publicada: boolean;
+  tipoConteudo: string; tamanhoBytes: number; miniaturaDisponivel: boolean; createdAt: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ServiceOrderService {
@@ -69,6 +73,14 @@ export class ServiceOrderService {
     return firstValueFrom(this.http.post<ServiceOrder>(`/api/ordens-servico/${id}/previsao`, input,
       { headers: await this.headers() }));
   }
+  photos(id: string) { return firstValueFrom(this.http.get<ServicePhoto[]>(`/api/ordens-servico/${id}/fotos`)); }
+  async uploadPhoto(id: string, file: File, stage: ServiceOrderStatus, uploadId: string) {
+    const data = new FormData(); data.append('arquivo', file); data.append('etapa', stage);
+    data.append('legenda', ''); data.append('publicada', 'false'); data.append('uploadId', uploadId);
+    return this.http.post<ServicePhoto>(`/api/ordens-servico/${id}/fotos`, data, { headers: await this.headers(), observe: 'events', reportProgress: true });
+  }
+  photoUrl(orderId: string, photoId: string, thumbnail = true) { return `/api/ordens-servico/${orderId}/fotos/${photoId}/arquivo?miniatura=${thumbnail}`; }
+  async deletePhoto(orderId: string, photoId: string) { return firstValueFrom(this.http.delete<void>(`/api/ordens-servico/${orderId}/fotos/${photoId}`, { headers: await this.headers() })); }
   private async headers() {
     const csrf = await firstValueFrom(this.http.get<{ token: string; headerName: string }>('/api/auth/csrf'));
     return { [csrf.headerName]: csrf.token };
