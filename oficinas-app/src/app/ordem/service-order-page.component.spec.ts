@@ -28,12 +28,15 @@ describe('Ordens de serviço', () => {
 
   beforeEach(() => {
     service = jasmine.createSpyObj<ServiceOrderService>('ServiceOrderService',
-      ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish', 'forecasts', 'updateForecast']);
+      ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish', 'forecasts', 'updateForecast',
+        'photos', 'inspection', 'saveInspection', 'confirmInspection', 'correctInspection']);
     registrations = jasmine.createSpyObj<CustomerVehicleService>('CustomerVehicleService', ['customers', 'vehicles']);
     service.orders.and.resolveTo({ items: [order], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     service.order.and.resolveTo(order);
     service.timeline.and.resolveTo([event]);
     service.forecasts.and.resolveTo([forecast]);
+    service.photos.and.resolveTo([]);
+    service.inspection.and.resolveTo([]);
     registrations.customers.and.resolveTo({ items: [customer], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     registrations.vehicles.and.resolveTo({ items: [vehicle], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     TestBed.configureTestingModule({ imports: [ServiceOrderPageComponent], providers: [provideRouter([]),
@@ -144,5 +147,36 @@ describe('Ordens de serviço', () => {
     const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
     expect(component.deadlineLabel({ ...order, atrasada: true })).toContain('ultrapassada');
     expect(component.deadlineLabel({ ...order, aguardandoRetirada: true })).toContain('retirada');
+  });
+
+  it('preserva o formulário no navegador quando a confirmação falha', async () => {
+    service.saveInspection.and.rejectWith(new Error('offline'));
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load();
+    component.inspectionForm.patchValue({ quilometragem: '48211', combustivel: 'METADE',
+      avarias: 'Risco no para-choque' });
+    await component.confirmInspection();
+    const saved = JSON.parse(sessionStorage.getItem('vistoria:o1')!);
+    expect(saved.quilometragem).toBe(48211);
+    expect(saved.avarias).toContain('Risco');
+    expect(service.confirmInspection).not.toHaveBeenCalled();
+    sessionStorage.removeItem('vistoria:o1');
+  });
+
+  it('registra correção em nova versão com motivo', async () => {
+    service.inspection.and.resolveTo([{ id: 'i1', numeroVersao: 1, estado: 'CONFIRMADA',
+      checklist: { quilometragem: 48210, combustivel: 'METADE', objetos: '', avarias: '',
+        observacoes: '', fotos: {} }, motivoCorrecao: null, createdAt: order.createdAt, updatedAt: order.updatedAt }]);
+    service.correctInspection.and.resolveTo({ id: 'i2', numeroVersao: 2, estado: 'CONFIRMADA',
+      checklist: { quilometragem: 48211, combustivel: 'METADE', objetos: '', avarias: '',
+        observacoes: '', fotos: {} }, motivoCorrecao: 'Conferência no painel',
+      createdAt: order.createdAt, updatedAt: order.updatedAt });
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.beginCorrection();
+    component.inspectionForm.controls.quilometragem.setValue('48211');
+    component.correctionReason.setValue('Conferência no painel');
+    await component.correctInspection();
+    expect(service.correctInspection).toHaveBeenCalledWith('o1', 0, 'Conferência no painel',
+      jasmine.objectContaining({ quilometragem: 48211 }));
   });
 });

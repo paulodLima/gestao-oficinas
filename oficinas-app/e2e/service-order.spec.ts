@@ -38,6 +38,18 @@ test('abre, localiza e consulta uma ordem de serviço', async ({ page }, info) =
   await expect(page.getByRole('heading', { name: 'OS-000001' })).toBeVisible();
   await expect(page.getByText('48.210 km')).toBeVisible();
 
+  await page.getByLabel('Quilometragem', { exact: true }).last().fill('48211');
+  await page.getByLabel('Combustível aproximado').selectOption('METADE');
+  await page.getByLabel('Avarias aparentes').fill('Risco leve no para-choque traseiro.');
+  await page.route('**/vistoria/confirmacoes', route => route.abort('failed'));
+  await page.getByRole('button', { name: 'Confirmar vistoria' }).click();
+  await expect(page.getByRole('alert')).toContainText('Não foi possível');
+  await expect(page.getByLabel('Avarias aparentes')).toHaveValue('Risco leve no para-choque traseiro.');
+  await page.unroute('**/vistoria/confirmacoes');
+  await page.getByRole('button', { name: 'Confirmar vistoria' }).click();
+  await expect(page.getByRole('status')).toContainText('Vistoria confirmada');
+  await expect(page.getByText('Versão 1 · Confirmada')).toBeVisible();
+
   await page.getByLabel('Nova etapa *').selectOption('EM_TESTES');
   await page.getByRole('button', { name: 'Atualizar etapa' }).click();
   await expect(page.getByRole('status')).toContainText('Etapa atualizada');

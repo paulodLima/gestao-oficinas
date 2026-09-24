@@ -29,7 +29,7 @@ Entregar a vistoria de entrada da OS em fluxo mobile-first, com rascunho, confir
 - [x] 9.2 Criar roteiro de fotos opcional e integração com câmera/galeria existente.
 - [x] 9.3 Implementar confirmação e correção auditável sem apagar versão anterior.
 - [x] 9.4 Preservar campos durante falha de envio.
-- [ ] 9.5 Testes unitários, integração e E2E móvel pertinentes.
+- [x] 9.5 Testes unitários, integração e E2E móvel pertinentes.
 
 ## Critérios de Sucesso
 
@@ -39,6 +39,6 @@ Entregar a vistoria de entrada da OS em fluxo mobile-first, com rascunho, confir
 
 ## Testes da Tarefa
 
-- [ ] Unidade: validação, confirmação e correção.
-- [ ] Integração: rascunho, histórico e isolamento.
-- [ ] E2E: falha de envio e retomada de formulário.
+- [x] Unidade: validação, confirmação e correção.
+- [x] Integração: rascunho, histórico e isolamento.
+- [x] E2E: falha de envio e retomada de formulário.

@@ -1,0 +1,13 @@
+.photo-guide {
+  margin-top: 18px !important;
+  padding: 14px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+}
+.photo-guide legend { padding: 0 6px; color: var(--ink); font-size: 13px; font-weight: 750; }
+.photo-guide .hint { margin: 4px 0; }
+.photo-guide-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.inspection-history { margin-top: 14px; }
+.inspection-history article { display: grid; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.inspection-history small { color: var(--muted); font-size: 11px; }
+@media (max-width: 620px) { .photo-guide-grid { grid-template-columns: 1fr; gap: 0; } }

@@ -3,7 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { Inspection, ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
+import { FuelLevel, Inspection, InspectionChecklist, ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
   ServiceOrderStatus } from './service-order.service';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
@@ -19,7 +19,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
   selector: 'app-service-order-page',
   imports: [ReactiveFormsModule],
   templateUrl: './service-order-page.component.html',
-  styleUrl: './service-order-page.component.css'
+  styleUrls: ['./service-order-page.component.css', './inspection.css']
 })
 export class ServiceOrderPageComponent implements OnInit {
   private readonly service = inject(ServiceOrderService);
@@ -35,6 +35,9 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly photos = signal<ServicePhoto[]>([]);
   readonly uploads = signal<{ name: string; progress: number; error: string }[]>([]);
   readonly inspections = signal<Inspection[]>([]);
+  readonly correctingInspection = signal(false);
+  readonly hasInspectionDraft = computed(() => this.inspections().some(item => item.estado === 'RASCUNHO'));
+  readonly hasConfirmedInspection = computed(() => this.inspections().some(item => item.estado === 'CONFIRMADA'));
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal('');
@@ -71,9 +74,18 @@ export class ServiceOrderPageComponent implements OnInit {
     motivoPublico: ['', [Validators.required, Validators.maxLength(1000)]],
     proximaAcao: ['', [Validators.required, Validators.maxLength(1000)]]
   });
-  readonly inspectionForm = this.builder.nonNullable.group({ quilometragem: [''], combustivel: [''], objetos: ['', Validators.maxLength(1000)], avarias: ['', Validators.maxLength(2000)], observacoes: ['', Validators.maxLength(2000)] });
+  readonly inspectionForm = this.builder.nonNullable.group({
+    quilometragem: ['', Validators.pattern(/^\d{0,7}$/)], combustivel: ['' as FuelLevel | ''],
+    objetos: ['', Validators.maxLength(1000)], avarias: ['', Validators.maxLength(2000)],
+    observacoes: ['', Validators.maxLength(2000)], frente: [''], traseira: [''],
+    lateralEsquerda: [''], lateralDireita: [''], painel: [''], detalhes: ['']
+  });
+  readonly correctionReason = this.builder.nonNullable.control('', [Validators.required, Validators.maxLength(1000)]);
 
-  ngOnInit() { void this.load(); }
+  ngOnInit() {
+    this.inspectionForm.valueChanges.subscribe(() => this.persistInspection());
+    void this.load();
+  }
   async load() {
     this.loading.set(true); this.clearMessages();
     try {
@@ -178,8 +190,51 @@ export class ServiceOrderPageComponent implements OnInit {
       await this.loadHistory(order.id);
     }, 'Previsão atualizada e registrada no histórico.');
   }
-  async saveInspection() { const order=this.selected(); if(!order)return; const data=this.inspectionForm.getRawValue(); sessionStorage.setItem(`vistoria:${order.id}`,JSON.stringify(data)); await this.perform(async()=>{await this.service.saveInspection(order.id,data);await this.loadInspection(order.id);},'Rascunho da vistoria salvo.'); }
-  async confirmInspection() { const order=this.selected(); if(!order)return; await this.perform(async()=>{await this.service.saveInspection(order.id,this.inspectionForm.getRawValue()); await this.service.confirmInspection(order.id,order.versao); sessionStorage.removeItem(`vistoria:${order.id}`); await this.loadInspection(order.id); const current=await this.service.order(order.id);this.replaceOrder(current);},'Vistoria confirmada e preservada no histórico.'); }
+  async saveInspection() {
+    const order = this.selected();
+    this.inspectionForm.markAllAsTouched();
+    if (!order || this.inspectionForm.invalid) { this.error.set('Confira os campos da vistoria.'); return; }
+    this.persistInspection();
+    await this.perform(async () => {
+      await this.service.saveInspection(order.id, this.inspectionData());
+      await this.loadInspection(order.id);
+    }, 'Rascunho da vistoria salvo.');
+  }
+  async confirmInspection() {
+    const order = this.selected();
+    this.inspectionForm.markAllAsTouched();
+    if (!order || this.inspectionForm.invalid) { this.error.set('Confira os campos da vistoria.'); return; }
+    this.persistInspection();
+    await this.perform(async () => {
+      await this.service.saveInspection(order.id, this.inspectionData());
+      await this.service.confirmInspection(order.id, order.versao);
+      sessionStorage.removeItem(this.inspectionKey(order.id));
+      await this.loadInspection(order.id);
+      this.replaceOrder(await this.service.order(order.id));
+    }, 'Vistoria confirmada e preservada no histórico.');
+  }
+  beginCorrection() {
+    const latest = this.inspections().find(item => item.estado === 'CONFIRMADA');
+    if (!latest) return;
+    this.applyInspection(latest.checklist);
+    this.correctionReason.setValue('');
+    this.correctingInspection.set(true);
+  }
+  async correctInspection() {
+    const order = this.selected();
+    this.inspectionForm.markAllAsTouched(); this.correctionReason.markAsTouched();
+    if (!order || this.inspectionForm.invalid || this.correctionReason.invalid) {
+      this.error.set('Informe os dados e o motivo da correção.'); return;
+    }
+    await this.perform(async () => {
+      await this.service.correctInspection(order.id, order.versao,
+        this.correctionReason.value, this.inspectionData());
+      sessionStorage.removeItem(this.inspectionKey(order.id));
+      this.correctingInspection.set(false);
+      await this.loadInspection(order.id);
+      this.replaceOrder(await this.service.order(order.id));
+    }, 'Correção registrada como uma nova versão da vistoria.');
+  }
   selectPhotos(event: Event) {
     const order = this.selected(); const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []).slice(0, 20); input.value = '';
@@ -236,7 +291,42 @@ export class ServiceOrderPageComponent implements OnInit {
     try { this.photos.set(await this.service.photos(id)); }
     catch { this.photos.set([]); }
   }
-  private async loadInspection(id: string) { this.inspectionForm.reset({ quilometragem: '', combustivel: '', objetos: '', avarias: '', observacoes: '' }); try { const items=await this.service.inspection(id); this.inspections.set(items); const draft=items.find(item=>item.estado==='RASCUNHO'); const stored=sessionStorage.getItem(`vistoria:${id}`); const source=stored?JSON.parse(stored):draft?.checklist; if(source)this.inspectionForm.patchValue(source); } catch { this.inspections.set([]); } }
+  private async loadInspection(id: string) {
+    this.inspectionForm.reset({ quilometragem: '', combustivel: '', objetos: '', avarias: '', observacoes: '',
+      frente: '', traseira: '', lateralEsquerda: '', lateralDireita: '', painel: '', detalhes: '' }, { emitEvent: false });
+    this.correctingInspection.set(false);
+    try {
+      const items = await this.service.inspection(id); this.inspections.set(items);
+      const draft = items.find(item => item.estado === 'RASCUNHO');
+      const confirmed = items.find(item => item.estado === 'CONFIRMADA');
+      const stored = sessionStorage.getItem(this.inspectionKey(id));
+      let source: InspectionChecklist | undefined;
+      if (stored && !confirmed) { try { source = JSON.parse(stored); } catch { sessionStorage.removeItem(this.inspectionKey(id)); } }
+      source ??= draft?.checklist ?? confirmed?.checklist;
+      if (source) this.applyInspection(source);
+    } catch { this.inspections.set([]); }
+  }
+  private inspectionData(): InspectionChecklist {
+    const value = this.inspectionForm.getRawValue();
+    const fotos = Object.fromEntries(['frente', 'traseira', 'lateralEsquerda', 'lateralDireita', 'painel', 'detalhes']
+      .map(key => [key, value[key as keyof typeof value]]).filter(([, photo]) => !!photo)) as Record<string, string>;
+    return { quilometragem: value.quilometragem ? Number(value.quilometragem) : null,
+      combustivel: value.combustivel || null, objetos: value.objetos.trim(), avarias: value.avarias.trim(),
+      observacoes: value.observacoes.trim(), fotos };
+  }
+  private applyInspection(checklist: InspectionChecklist) {
+    this.inspectionForm.patchValue({ quilometragem: checklist.quilometragem?.toString() ?? '',
+      combustivel: checklist.combustivel ?? '', objetos: checklist.objetos ?? '', avarias: checklist.avarias ?? '',
+      observacoes: checklist.observacoes ?? '', frente: checklist.fotos?.['frente'] ?? '',
+      traseira: checklist.fotos?.['traseira'] ?? '', lateralEsquerda: checklist.fotos?.['lateralEsquerda'] ?? '',
+      lateralDireita: checklist.fotos?.['lateralDireita'] ?? '', painel: checklist.fotos?.['painel'] ?? '',
+      detalhes: checklist.fotos?.['detalhes'] ?? '' }, { emitEvent: false });
+  }
+  private persistInspection() {
+    const order = this.selected();
+    if (order) sessionStorage.setItem(this.inspectionKey(order.id), JSON.stringify(this.inspectionData()));
+  }
+  private inspectionKey(id: string) { return `vistoria:${id}`; }
   private setUpload(name: string, progress: number, error = '') { this.uploads.update(items => items.map(item => item.name === name ? { ...item, progress, error } : item)); }
   private replaceOrder(order: ServiceOrder) {
     this.selected.set(order);

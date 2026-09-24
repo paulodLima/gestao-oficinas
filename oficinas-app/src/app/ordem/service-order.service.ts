@@ -40,7 +40,12 @@ export interface ServicePhoto {
   id: string; etapa: ServiceOrderStatus; legenda: string | null; publicada: boolean;
   tipoConteudo: string; tamanhoBytes: number; miniaturaDisponivel: boolean; createdAt: string;
 }
-export interface Inspection { id: string; numeroVersao: number; estado: 'RASCUNHO' | 'CONFIRMADA'; checklist: Record<string, unknown>; motivoCorrecao: string | null; createdAt: string; updatedAt: string; }
+export type FuelLevel = 'VAZIO' | 'RESERVA' | 'UM_QUARTO' | 'METADE' | 'TRES_QUARTOS' | 'CHEIO';
+export interface InspectionChecklist {
+  quilometragem: number | null; combustivel: FuelLevel | null; objetos: string;
+  avarias: string; observacoes: string; fotos: Record<string, string>;
+}
+export interface Inspection { id: string; numeroVersao: number; estado: 'RASCUNHO' | 'CONFIRMADA'; checklist: InspectionChecklist; motivoCorrecao: string | null; createdAt: string; updatedAt: string; }
 
 @Injectable({ providedIn: 'root' })
 export class ServiceOrderService {
@@ -83,8 +88,12 @@ export class ServiceOrderService {
   photoUrl(orderId: string, photoId: string, thumbnail = true) { return `/api/ordens-servico/${orderId}/fotos/${photoId}/arquivo?miniatura=${thumbnail}`; }
   async deletePhoto(orderId: string, photoId: string) { return firstValueFrom(this.http.delete<void>(`/api/ordens-servico/${orderId}/fotos/${photoId}`, { headers: await this.headers() })); }
   inspection(id: string) { return firstValueFrom(this.http.get<Inspection[]>(`/api/ordens-servico/${id}/vistoria`)); }
-  async saveInspection(id: string, checklist: Record<string, unknown>) { return firstValueFrom(this.http.put<Inspection>(`/api/ordens-servico/${id}/vistoria`, checklist, { headers: await this.headers() })); }
+  async saveInspection(id: string, checklist: InspectionChecklist) { return firstValueFrom(this.http.put<Inspection>(`/api/ordens-servico/${id}/vistoria`, checklist, { headers: await this.headers() })); }
   async confirmInspection(id: string, expectedVersion: number) { return firstValueFrom(this.http.post<Inspection>(`/api/ordens-servico/${id}/vistoria/confirmacoes`, { expectedVersion }, { headers: await this.headers() })); }
+  async correctInspection(id: string, expectedVersion: number, motivo: string, checklist: InspectionChecklist) {
+    return firstValueFrom(this.http.post<Inspection>(`/api/ordens-servico/${id}/vistoria/correcoes`,
+      { expectedVersion, motivo, checklist }, { headers: await this.headers() }));
+  }
   private async headers() {
     const csrf = await firstValueFrom(this.http.get<{ token: string; headerName: string }>('/api/auth/csrf'));
     return { [csrf.headerName]: csrf.token };

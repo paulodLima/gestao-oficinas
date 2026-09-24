@@ -273,6 +273,33 @@ class ServiceOrderIntegrationTest {
         }
         assertEquals(2, mapper.readTree(account.primary().get(path.replace("/status", "/atualizacoes")).body()).size());
     }
+    @Test void preservesInspectionDraftConfirmationCorrectionAndShopIsolation() throws Exception {
+        Browser owner = account().primary();
+        Browser outsider = account().primary();
+        JsonNode order = openedOrder(owner, "Cliente Vistoria", "52998224725", "VIS1A23");
+        String path = "/api/ordens-servico/" + order.get("id").asText() + "/vistoria";
+        Map<String, Object> draft = Map.of("quilometragem", 3001, "combustivel", "METADE",
+            "objetos", "Chave reserva", "avarias", "Risco traseiro", "observacoes", "Sem ressalvas",
+            "fotos", Map.of());
+        assertEquals(200, owner.send("PUT", path, draft).statusCode());
+        JsonNode draftHistory = mapper.readTree(owner.get(path).body());
+        assertEquals(1, draftHistory.size());
+        assertEquals("RASCUNHO", draftHistory.get(0).get("estado").asText());
+        assertEquals(404, outsider.get(path).statusCode());
+
+        assertEquals(200, owner.send("POST", path + "/confirmacoes", Map.of("expectedVersion", 0)).statusCode());
+        assertEquals(409, owner.send("PUT", path, draft).statusCode());
+        Map<String, Object> corrected = new HashMap<>(draft);
+        corrected.put("quilometragem", 3010);
+        var correction = owner.send("POST", path + "/correcoes", Map.of("expectedVersion", 1,
+            "motivo", "Quilometragem conferida no painel.", "checklist", corrected));
+        assertEquals(200, correction.statusCode(), correction.body());
+        JsonNode history = mapper.readTree(owner.get(path).body());
+        assertEquals(2, history.size());
+        assertEquals(2, history.get(0).get("numeroVersao").asInt());
+        assertEquals(3010, history.get(0).get("checklist").get("quilometragem").asInt());
+        assertEquals(3001, history.get(1).get("checklist").get("quilometragem").asInt());
+    }
     private JsonNode search(Browser browser, String query) throws Exception {
         return mapper.readTree(browser.get("/api/ordens-servico?q=" + URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8)).body());
     }
