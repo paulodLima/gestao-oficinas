@@ -14,11 +14,7 @@ import { PublicProfile } from './shop.service';
       <dt>Atendimento</dt><dd>{{ profile().horario || 'Consulte a oficina sobre os horários' }}</dd>
       <dt>Fuso horário</dt><dd>{{ profile().fuso }}</dd></dl>
     </article>`,
-  styles: [`article{border:1px solid #c8ccc0;padding:32px;background:#fffdf8;overflow-wrap:anywhere}
-    img,.monogram{width:96px;height:96px;object-fit:contain;margin-bottom:24px}.monogram{display:grid;place-items:center;background:#253e32;color:#f1a657;font:48px Georgia,serif}
-    .eyebrow{font-size:11px;letter-spacing:2px;color:#53604c}h2{font:32px Georgia,serif;margin:12px 0 28px}
-    dt{font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin-top:24px;color:#53604c}dd{margin:8px 0;white-space:pre-line;line-height:1.6}
-    @media(max-width:400px){article{padding:20px}h2{font-size:26px}}`]
+  styles: [`article{overflow-wrap:anywhere;padding:28px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}img,.monogram{width:76px;height:76px;margin-bottom:20px;border-radius:12px;object-fit:contain}.monogram{display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);font-size:32px;font-weight:800}.eyebrow{margin:0;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.1em}h2{margin:8px 0 24px;color:var(--ink);font-size:30px;letter-spacing:-.035em}dl{margin:0;border-top:1px solid var(--line)}dt{margin-top:18px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}dd{margin:5px 0;white-space:pre-line;line-height:1.55}@media(max-width:400px){article{padding:20px}h2{font-size:25px}}`]
 })
 export class ShopIdentityComponent {
   readonly profile = input.required<PublicProfile>();

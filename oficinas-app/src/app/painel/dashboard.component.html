@@ -1,9 +1,7 @@
-<header class="topbar"><a routerLink="/inicio" class="brand">/ gestão oficinas</a>
-  <nav aria-label="Navegação da oficina"><a routerLink="/ordens-servico">Ordens de serviço</a><a routerLink="/inicio">Início</a></nav></header>
 <main>
   <section class="hero"><div><p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p><h1>O ritmo da oficina.</h1>
     <p>Saiba o que está em andamento e onde sua atenção faz diferença.</p></div>
-    <a class="primary action" routerLink="/ordens-servico">Abrir ou consultar uma OS <span aria-hidden="true">↗</span></a></section>
+    <a class="primary action" routerLink="/abrir-ordem">Abrir ou consultar uma OS <span aria-hidden="true">↗</span></a></section>
   @if(snapshot(); as data) {
     <section class="metrics" aria-label="Indicadores de toda a oficina">
       @for(metric of metrics; track metric.key) {

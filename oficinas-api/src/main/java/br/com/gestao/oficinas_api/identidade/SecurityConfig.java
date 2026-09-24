@@ -44,7 +44,7 @@ public class SecurityConfig {
             .requestCache(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(a->a
                 .requestMatchers("/api/auth/csrf","/api/auth/cadastro","/api/auth/login",
-                    "/api/auth/recuperacao","/api/auth/redefinicao").permitAll()
+                    "/api/auth/recuperacao","/api/auth/redefinicao","/api/portal/**").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/publico/oficinas/*", "/api/publico/oficinas/*/logo").permitAll()
                 .requestMatchers("/api/painel","/api/auth/me","/api/auth/logout","/api/oficina","/api/oficina/logo",
                     "/api/clientes/**","/api/veiculos/**","/api/ordens-servico/**").hasRole("PROPRIETARIO")

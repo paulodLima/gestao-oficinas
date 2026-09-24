@@ -1,0 +1,3 @@
+.office-shell { min-height: 100dvh; background: var(--app-bg); }
+.office-content { min-height: 100dvh; margin-left: var(--sidebar-width); min-width: 0; }
+@media (max-width: 900px) { .office-content { margin-left: 0; padding-top: 74px; } }

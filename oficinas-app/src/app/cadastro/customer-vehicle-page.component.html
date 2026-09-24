@@ -1,8 +1,3 @@
-<header class="topbar">
-  <a routerLink="/inicio" class="brand">/ gestão oficinas</a>
-  <a routerLink="/inicio">Voltar ao início</a>
-</header>
-
 <main>
   <div class="hero">
     <div>
@@ -21,11 +16,6 @@
   @if (loading()) { <p role="status" class="loading">Carregando clientes e veículos…</p> }
 
   @if (!loading()) {
-    <div class="tabs" role="tablist" aria-label="Tipo de cadastro">
-      <button type="button" role="tab" [attr.aria-selected]="pane() === 'clientes'" (click)="pane.set('clientes')">Clientes</button>
-      <button type="button" role="tab" [attr.aria-selected]="pane() === 'veiculos'" (click)="pane.set('veiculos')">Veículos</button>
-    </div>
-
     @if (pane() === 'clientes') {
       <section class="workspace" aria-label="Cadastro de clientes">
         <div class="directory">

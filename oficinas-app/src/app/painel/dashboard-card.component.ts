@@ -5,7 +5,7 @@ import { DashboardCard, durationLabel, STAGES } from './dashboard.service';
 @Component({
   selector: 'app-dashboard-card', imports: [RouterLink],
   template: `<article [attr.data-order-id]="card.id" [class.late]="card.atrasada">
-    <div class="heading"><a [routerLink]="['/ordens-servico']" [queryParams]="{id: card.id}" [attr.aria-label]="'Abrir OS-' + card.numero">OS-{{ card.numero.toString().padStart(6, '0') }}</a>
+    <div class="heading"><a [routerLink]="['/abrir-ordem']" [queryParams]="{id: card.id}" [attr.aria-label]="'Abrir OS-' + card.numero">OS-{{ card.numero.toString().padStart(6, '0') }}</a>
       @if(card.atrasada){<span class="alert">Em atraso</span>}</div>
     <h3>{{ card.placa.slice(0,3) }}-{{ card.placa.slice(3) }}</h3><p class="vehicle">{{ card.veiculo }}</p><p>{{ card.clienteNome }}</p>
     <span class="stage">{{ label() }}</span>
@@ -14,7 +14,7 @@ import { DashboardCard, durationLabel, STAGES } from './dashboard.service';
       <div><dt>Tempo na etapa</dt><dd>{{ duration(card.tempoEtapaSegundos) }}</dd></div></dl>
     @if(card.status === 'PRONTO_PARA_RETIRADA'){<p class="ready">Aguardando retirada</p>}
   </article>`,
-  styles: [`:host{display:block;min-width:0}article{background:var(--surface,#fffdf8);border:1px solid var(--line,#c8ccc0);border-top:3px solid var(--green,#254d38);padding:16px;height:100%;box-sizing:border-box;overflow-wrap:anywhere}article.late{border-top-color:var(--danger,#963b25)}.heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}a{min-height:44px;display:inline-flex;align-items:center;color:var(--green,#254d38);font-weight:bold}a:focus-visible{outline:3px solid #b75a18;outline-offset:3px}.alert{color:var(--danger,#963b25);font-size:13px;font-weight:bold}h3{font:700 23px 'Courier New',monospace;letter-spacing:.06em;margin:12px 0 8px}p{margin:6px 0;line-height:1.5}.vehicle{font-weight:bold}.stage{display:inline-block;background:#eceee5;color:#33452f;padding:6px 8px;font-size:13px;margin:12px 0}dl{margin:4px 0}dl>div{margin-top:12px}dt{font-size:12px;color:#53604c}dd{margin:4px 0;font-size:14px;font-variant-numeric:tabular-nums}.ready{color:#254d38;font-size:13px;font-weight:bold}`]
+  styles: [`:host{display:block;min-width:0}article{height:100%;padding:16px;border:1px solid var(--line);border-top:3px solid var(--brand);border-radius:8px;background:var(--surface);overflow-wrap:anywhere}article.late{border-top-color:var(--danger)}.heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}a{min-height:36px;display:inline-flex;align-items:center;color:var(--brand);font-size:13px;font-weight:800;text-decoration:none}.alert{color:var(--danger);font-size:12px;font-weight:750}h3{margin:10px 0 4px;font:750 19px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em}p{margin:4px 0;color:var(--muted);font-size:13px;line-height:1.45}.vehicle{color:var(--ink);font-weight:700}.stage{display:inline-block;margin:12px 0 4px;padding:4px 7px;border-radius:5px;background:var(--brand-soft);color:var(--brand);font-size:11px;font-weight:750}dl{margin:8px 0 0}dl>div{margin-top:9px}dt{color:var(--muted);font-size:11px}dd{margin:2px 0;color:var(--ink);font-size:12px;font-variant-numeric:tabular-nums}.ready{color:var(--success);font-size:12px;font-weight:750}`]
 })
 export class DashboardCardComponent {
   @Input({ required: true }) card!: DashboardCard;

@@ -1,9 +1,9 @@
 import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
+import { Inspection, ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
   ServiceOrderStatus } from './service-order.service';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
@@ -17,7 +17,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
 
 @Component({
   selector: 'app-service-order-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule],
   templateUrl: './service-order-page.component.html',
   styleUrl: './service-order-page.component.css'
 })
@@ -34,6 +34,7 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly forecasts = signal<ServiceOrderForecast[]>([]);
   readonly photos = signal<ServicePhoto[]>([]);
   readonly uploads = signal<{ name: string; progress: number; error: string }[]>([]);
+  readonly inspections = signal<Inspection[]>([]);
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly error = signal('');
@@ -70,6 +71,7 @@ export class ServiceOrderPageComponent implements OnInit {
     motivoPublico: ['', [Validators.required, Validators.maxLength(1000)]],
     proximaAcao: ['', [Validators.required, Validators.maxLength(1000)]]
   });
+  readonly inspectionForm = this.builder.nonNullable.group({ quilometragem: [''], combustivel: [''], objetos: ['', Validators.maxLength(1000)], avarias: ['', Validators.maxLength(2000)], observacoes: ['', Validators.maxLength(2000)] });
 
   ngOnInit() { void this.load(); }
   async load() {
@@ -82,7 +84,7 @@ export class ServiceOrderPageComponent implements OnInit {
       const requestedId = this.route.snapshot.queryParamMap.get('id');
       const first = requestedId ? await this.service.order(requestedId) : orders.items[0] ?? null;
       this.selected.set(first);
-      if (first) { await this.loadHistory(first.id); await this.loadPhotos(first.id); }
+      if (first) { await this.loadHistory(first.id); await this.loadPhotos(first.id); await this.loadInspection(first.id); }
     } catch (error) { this.showError(error, 'Não foi possível carregar as ordens de serviço.'); }
     finally { this.loading.set(false); }
   }
@@ -107,7 +109,7 @@ export class ServiceOrderPageComponent implements OnInit {
   async selectOrder(order: ServiceOrder) {
     await this.perform(async () => {
       const detail = await this.service.order(order.id);
-      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id);
+      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id); await this.loadInspection(detail.id);
     }, 'Detalhes atualizados.');
   }
   async createOrder() {
@@ -122,7 +124,7 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const opened = await this.service.create(input);
       this.orders.update(items => [opened, ...items]); this.selected.set(opened);
-      this.resetWorkflowForms(); await this.loadHistory(opened.id); await this.loadPhotos(opened.id);
+      this.resetWorkflowForms(); await this.loadHistory(opened.id); await this.loadPhotos(opened.id); await this.loadInspection(opened.id);
     }, 'Ordem de serviço aberta com sucesso.');
   }
   async changeStatus() {
@@ -176,6 +178,8 @@ export class ServiceOrderPageComponent implements OnInit {
       await this.loadHistory(order.id);
     }, 'Previsão atualizada e registrada no histórico.');
   }
+  async saveInspection() { const order=this.selected(); if(!order)return; const data=this.inspectionForm.getRawValue(); sessionStorage.setItem(`vistoria:${order.id}`,JSON.stringify(data)); await this.perform(async()=>{await this.service.saveInspection(order.id,data);await this.loadInspection(order.id);},'Rascunho da vistoria salvo.'); }
+  async confirmInspection() { const order=this.selected(); if(!order)return; await this.perform(async()=>{await this.service.saveInspection(order.id,this.inspectionForm.getRawValue()); await this.service.confirmInspection(order.id,order.versao); sessionStorage.removeItem(`vistoria:${order.id}`); await this.loadInspection(order.id); const current=await this.service.order(order.id);this.replaceOrder(current);},'Vistoria confirmada e preservada no histórico.'); }
   selectPhotos(event: Event) {
     const order = this.selected(); const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []).slice(0, 20); input.value = '';
@@ -232,6 +236,7 @@ export class ServiceOrderPageComponent implements OnInit {
     try { this.photos.set(await this.service.photos(id)); }
     catch { this.photos.set([]); }
   }
+  private async loadInspection(id: string) { this.inspectionForm.reset({ quilometragem: '', combustivel: '', objetos: '', avarias: '', observacoes: '' }); try { const items=await this.service.inspection(id); this.inspections.set(items); const draft=items.find(item=>item.estado==='RASCUNHO'); const stored=sessionStorage.getItem(`vistoria:${id}`); const source=stored?JSON.parse(stored):draft?.checklist; if(source)this.inspectionForm.patchValue(source); } catch { this.inspections.set([]); } }
   private setUpload(name: string, progress: number, error = '') { this.uploads.update(items => items.map(item => item.name === name ? { ...item, progress, error } : item)); }
   private replaceOrder(order: ServiceOrder) {
     this.selected.set(order);

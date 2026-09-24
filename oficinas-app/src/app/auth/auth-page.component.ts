@@ -67,7 +67,7 @@ export class AuthPageComponent implements OnInit {
     try {
       if (this.mode === 'login') {
         await this.auth.login(data.email, data.senha);
-        await this.router.navigateByUrl('/inicio');
+        await this.router.navigateByUrl('/painel');
       } else if (this.mode === 'register') {
         await this.auth.post('/api/auth/cadastro', { nome: data.nome, nomeOficina: data.nomeOficina, email: data.email, senha: data.senha });
         this.success.set('Conta criada! Agora você já pode entrar com seu e-mail e senha.');
@@ -87,4 +87,3 @@ export class AuthPageComponent implements OnInit {
     } finally { this.busy.set(false); }
   }
 }
-

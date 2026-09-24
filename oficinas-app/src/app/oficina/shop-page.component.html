@@ -1,8 +1,7 @@
-<header><a routerLink="/inicio">/ gestão oficinas</a><a routerLink="/inicio">Voltar ao início</a></header>
 <main>
-  <p class="eyebrow">CONFIGURAÇÕES / IDENTIDADE</p>
-  <h1>O jeito de apresentar<br>a sua oficina.</h1>
-  <p class="intro">Organize as informações que ajudam seu cliente a encontrar você.</p>
+  <p class="eyebrow">PERFIL DA OFICINA</p>
+  <h1>Dados da sua oficina</h1>
+  <p class="intro">Atualize a identidade e os dados que aparecem para seus clientes.</p>
   @if (error()) { <p role="alert" class="notice error">{{ error() }}</p> }
   @if (success()) { <p role="status" class="notice success">{{ success() }}</p> }
   @if (loading()) { <p role="status">Carregando os dados da oficina…</p> }
@@ -10,7 +9,7 @@
   @if (shop(); as current) {
     <div class="layout"><section>
       <form [formGroup]="form" (ngSubmit)="save()">
-        <fieldset [disabled]="busy()"><legend>01 / Informações da oficina</legend>
+        <fieldset [disabled]="busy()"><legend>Informações da oficina</legend>
           <label for="shop-name">Nome da oficina *</label><input id="shop-name" formControlName="nome" maxlength="120" autocomplete="organization">
           <div class="pair"><div><label for="shop-phone">Telefone de contato</label><input id="shop-phone" type="tel" formControlName="telefone" maxlength="30" autocomplete="tel"></div>
           <div><label for="shop-email">E-mail de contato</label><input id="shop-email" type="email" formControlName="emailContato" maxlength="254" autocomplete="email"></div></div>
@@ -24,7 +23,7 @@
           <button type="submit" class="primary">{{ busy() ? 'Salvando…' : 'Salvar informações' }}</button>
         </fieldset>
       </form>
-      <section class="logo"><h2>02 / Logo da oficina</h2><p>PNG ou JPEG, até 2 MiB e 4 megapixels. Sem imagem, mostramos a inicial da oficina.</p>
+      <section class="logo"><h2>Logo da oficina</h2><p>PNG ou JPEG, até 2 MiB e 4 megapixels. Sem imagem, mostramos a inicial da oficina.</p>
         <label for="shop-logo">Selecionar logo</label><input id="shop-logo" type="file" accept="image/png,image/jpeg" (change)="upload($event)" [disabled]="busy()">
         <p class="hint">A logo é salva ao selecionar o arquivo.</p>
         @if (current.temLogo) { <button type="button" (click)="removeLogo()" [disabled]="busy()">Remover logo</button> }

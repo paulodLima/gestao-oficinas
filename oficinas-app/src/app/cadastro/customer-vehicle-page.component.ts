@@ -1,17 +1,18 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Customer, CustomerInput, CustomerVehicleService, Vehicle, VehicleInput } from './customer-vehicle.service';
 
 @Component({
   selector: 'app-customer-vehicle-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule],
   templateUrl: './customer-vehicle-page.component.html',
   styleUrl: './customer-vehicle-page.component.css'
 })
 export class CustomerVehiclePageComponent implements OnInit {
   private readonly service = inject(CustomerVehicleService);
+  private readonly route = inject(ActivatedRoute);
   private readonly builder = inject(FormBuilder);
   readonly customers = signal<Customer[]>([]);
   readonly vehicles = signal<Vehicle[]>([]);
@@ -43,7 +44,11 @@ export class CustomerVehiclePageComponent implements OnInit {
     clienteId: ['', Validators.required]
   });
 
-  ngOnInit() { void this.load(); }
+  ngOnInit() {
+    const pane = this.route.snapshot.data['pane'];
+    if (pane === 'clientes' || pane === 'veiculos') this.pane.set(pane);
+    void this.load();
+  }
   async load() {
     this.loading.set(true); this.clearMessages();
     try {

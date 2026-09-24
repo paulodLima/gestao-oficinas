@@ -5,12 +5,12 @@ import { ShopIdentityComponent } from './shop-identity.component';
 
 @Component({
   selector: 'app-public-shop', imports: [ShopIdentityComponent],
-  template: `<main><p class="brand">/ gestão oficinas</p>
-    @if (profile(); as shop) { <app-shop-identity [profile]="shop" /> }
+  template: `<main>
+    @if (profile(); as shop) { <p class="brand">{{ shop.nome }}</p><app-shop-identity [profile]="shop" /> }
     @else if (error()) { <h1>Perfil indisponível</h1><p role="alert">Não foi possível carregar este perfil. Ele pode não estar publicado.</p><button (click)="load()">Tentar novamente</button> }
     @else { <p role="status">Carregando oficina…</p> }
     </main>`,
-  styles: [`main{max-width:640px;margin:auto;padding:32px 18px;min-height:100dvh}.brand{font-size:22px;margin-bottom:36px;color:#253e32}button{min-height:44px;padding:12px 24px}`]
+  styles: [`:host{display:block;min-height:100dvh;background:var(--app-bg);color:var(--ink)}main{max-width:720px;margin:auto;padding:32px 20px 56px;min-height:100dvh}.brand{display:flex;align-items:center;gap:10px;margin:0 0 30px;color:var(--ink);font-size:15px;font-weight:800}.brand::before{display:grid;width:32px;height:32px;place-items:center;border-radius:8px;background:var(--brand);color:#fff;content:'OF';font-size:11px;letter-spacing:.05em}button{min-height:44px;padding:10px 14px;border:1px solid var(--brand);border-radius:7px;background:var(--brand);color:#fff;font-weight:750;cursor:pointer}`]
 })
 export class PublicShopComponent implements OnInit {
   private readonly service = inject(ShopService);
