@@ -67,6 +67,7 @@ public class AdditionalDecisionService {
 
     @Transactional
     public ChallengeIssued issueCode(UUID shop, UUID customer, UUID order, UUID requestId) {
+        lockOrder(shop, order);
         verifyResponsibleCustomer(shop, customer, order);
         Current current = current(shop, order, requestId, false);
         if (!Set.of("ENVIADA", "PARCIALMENTE_DECIDIDA").contains(current.state())) {
@@ -103,6 +104,7 @@ public class AdditionalDecisionService {
     public PublicRequest confirm(UUID shop, UUID customer, UUID order, UUID requestId,
                                  String idempotencyKey, Confirmation input) {
         verifyConfirmation(idempotencyKey, input);
+        lockOrder(shop, order);
         verifyResponsibleCustomer(shop, customer, order);
         Current current = current(shop, order, requestId, true);
         String payloadHash = payloadHash(input);
@@ -277,6 +279,12 @@ public class AdditionalDecisionService {
                 result.getString(7), result.getTimestamp(8).toInstant(), result.getInt(9),
                 instant(result.getTimestamp(10))), id).stream().findFirst()
             .orElseThrow(() -> new ApiException(400, "CODIGO_INVALIDO", "Código inválido ou expirado."));
+    }
+
+    private void lockOrder(UUID shop, UUID order) {
+        // Always lock OS before request/version/challenge, including code issuance.
+        jdbc.query("SELECT id FROM ordem_servico WHERE oficina_id=? AND id=? FOR UPDATE",
+            (result, row) -> result.getObject(1, UUID.class), shop, order);
     }
 
     private void verifyResponsibleCustomer(UUID shop, UUID customer, UUID order) {

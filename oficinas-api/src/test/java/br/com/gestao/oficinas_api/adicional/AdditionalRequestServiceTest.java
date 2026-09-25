@@ -38,7 +38,7 @@ class AdditionalRequestServiceTest {
     @BeforeEach void setUp() {
         service = new AdditionalRequestService(repository, orders, new AdditionalPolicy(),
             Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC), notifications);
-        when(orders.order(owner, orderId)).thenReturn(order(ServiceOrderStatus.EM_DIAGNOSTICO));
+        when(orders.lockActive(owner, orderId)).thenReturn(order(ServiceOrderStatus.EM_DIAGNOSTICO));
     }
 
     @Test void validatesAndCalculatesDraftBeforePersisting() {
@@ -74,7 +74,7 @@ class AdditionalRequestServiceTest {
     }
 
     @Test void rejectsWritesWhenServiceOrderIsClosed() {
-        when(orders.order(owner, orderId)).thenReturn(order(ServiceOrderStatus.ENTREGUE));
+        when(orders.lockActive(owner, orderId)).thenReturn(order(ServiceOrderStatus.ENTREGUE));
         ApiException error = assertThrows(ApiException.class,
             () -> service.create(owner, orderId, draft(null)));
         assertEquals("ORDEM_ENCERRADA", error.code);

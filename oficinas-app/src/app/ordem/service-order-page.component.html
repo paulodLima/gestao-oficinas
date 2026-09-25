@@ -41,6 +41,8 @@
           <p class="badge deadline-state" [class.late]="order.atrasada" [class.ready]="order.aguardandoRetirada">{{ deadlineLabel(order) }}</p>
           <h3>Relato de entrada</h3><p class="report">{{ order.relatoInicial }}</p>
           <app-order-share [order]="order" />
+          <app-order-closure [order]="order" (closed)="orderClosed($event)" (returnVisit)="returnVisit($event)" />
+          <fieldset [disabled]="!isActive(order)" aria-label="Operação e histórico da OS">
           <section class="workflow" aria-labelledby="workflow-title">
             <div class="subheading"><div><p class="step">03 / FLUXO</p><h3 id="workflow-title">Atualizar etapa</h3></div>
               <span class="version">versão {{ order.versao }}</span></div>
@@ -139,6 +141,7 @@
             </fieldset></form>
             @if (inspections().length) { <div class="inspection-history"><p class="hint">{{ inspections().length }} versão(ões) preservada(s).</p>@for (item of inspections(); track item.id) { <article><strong>Versão {{ item.numeroVersao }} · {{ item.estado === 'CONFIRMADA' ? 'Confirmada' : 'Rascunho' }}</strong><small>{{ formatDate(item.updatedAt) }}@if (item.motivoCorrecao) { · {{ item.motivoCorrecao }} }</small></article> } @if (!hasInspectionDraft()) { <button type="button" class="secondary full" (click)="beginCorrection()">Corrigir vistoria confirmada</button> }</div> }
           </section>
+          </fieldset>
           <button type="button" class="secondary full" (click)="newOrder()">Abrir outra ordem</button>
         } @else {
           <p class="step">02 / ABRIR</p><h2>Nova ordem de serviço</h2>

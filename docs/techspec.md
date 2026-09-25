@@ -236,7 +236,14 @@ Status internos: RECEBIDO, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO, AGUARDANDO_PECA
 Implementado na tarefa 06 com `ordem_servico_evento`, controle otimista por `expectedVersion`,
 projeções separadas para o histórico interno e público e publicação de atualização sem alteração
 de status. A interface da OS permite saltos, retornos justificados e consulta cronológica com
-autor e instante. O encerramento permanece reservado à tarefa 17.
+autor e instante. Encerramento implementado na tarefa 17 via `GET/POST /api/ordens-servico/{id}/encerramento`,
+com confirmação explícita, versão esperada, motivo obrigatório no cancelamento e consentimento
+separado para cancelar pendências. A transação bloqueia a OS antes de adicionais/desafios,
+preserva decisões e histórico, revoga links/códigos específicos e grava auditoria e outbox.
+`ordem_servico_encerramento` (V15) registra autor, instante e quantidade de pendências canceladas;
+o registro é imutável. Escritas de foto/vistoria/adicional/decisão compartilham a trava da OS.
+Gatilhos de pronto e encerramento usam a outbox da tarefa 15. Retorno usa nova OS e consulta
+por identidade com vínculo atual; grants de links antigos nunca acompanham a nova visita.
 
 Pronto não é encerrado nem atrasado de execução. Previsão null não gera atraso. Alteração com data conhecida → null mantém motivo/histórico. Fotos publicadas não desaparecem ao mudar status.
 

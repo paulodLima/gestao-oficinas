@@ -302,6 +302,43 @@ class PortalAccessIntegrationTest {
         assertEquals("contato@oficina.test", empty.get("oficina").get("email").asText());
     }
 
+    @Test
+    void realClosureRevokesOpenLinkSessionButIdentitySeesNewVisitAndOldHistoryStaysInternal() throws Exception {
+        Fixture fixture = fixture("RET1A23", "52998224725");
+        Fixture other = fixture("DIF1A23", "16899535009");
+        String path = "/api/ordens-servico/" + fixture.orderId();
+        Browser identity = new Browser(), exclusive = new Browser();
+        Challenge challenge = challenge(fixture, identity);
+        assertEquals(204, identity.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", challenge.id(), "codigo", challenge.code())).statusCode());
+        String token = mapper.readTree(fixture.owner().send("POST", path + "/acesso", Map.of()).body()).get("token").asText();
+        assertEquals(204, exclusive.send("POST", "/api/portal/acesso/link", Map.of("token", token)).statusCode());
+        assertEquals(200, exclusive.get("/api/portal/servico-atual").statusCode());
+        var input = Map.of("tipo", "ENTREGUE", "confirmado", true, "cancelarPendencias", false, "expectedVersion", 0);
+        assertEquals(404, other.owner().send("POST", path + "/encerramento", input).statusCode());
+        assertEquals(404, other.owner().get(path + "/encerramento").statusCode());
+        assertEquals(401, new Browser().get(path + "/encerramento").statusCode());
+        assertEquals(400, fixture.owner().send("POST", path + "/encerramento", Map.of("tipo", "ENTREGUE", "expectedVersion", 0)).statusCode());
+        var closed = fixture.owner().send("POST", path + "/encerramento", input);
+        assertEquals(200, closed.statusCode(), closed.body());
+        assertEquals("ENTREGUE", mapper.readTree(closed.body()).get("status").asText());
+        assertEquals(401, exclusive.get("/api/portal/servico-atual").statusCode());
+        assertTrue(mapper.readTree(identity.get("/api/portal/servico-atual?veiculoId=" + fixture.vehicleId()).body()).get("servico").isNull());
+        assertEquals(404, identity.get("/api/portal/ordens-servico/" + fixture.orderId() + "/atualizacoes").statusCode());
+        assertEquals(409, fixture.owner().send("DELETE", path + "/fotos/" + UUID.randomUUID(), Map.of()).statusCode());
+        assertEquals(409, fixture.owner().send("POST", path + "/acesso", Map.of()).statusCode());
+        var next = fixture.owner().send("POST", "/api/ordens-servico", Map.of("clienteId", fixture.customerId(),
+            "veiculoId", fixture.vehicleId(), "relatoInicial", "Nova visita para revisão completa", "entradaEm", Instant.now().minusSeconds(5).toString(), "kmEntrada", 15000));
+        assertEquals(201, next.statusCode(), next.body());
+        String nextId = mapper.readTree(next.body()).get("id").asText();
+        assertNotEquals(fixture.orderId().toString(), nextId);
+        assertEquals(nextId, mapper.readTree(identity.get("/api/portal/servico-atual?veiculoId=" + fixture.vehicleId()).body()).get("servico").get("id").asText());
+        assertEquals(400, new Browser().send("POST", "/api/portal/acesso/link", Map.of("token", token)).statusCode());
+        assertEquals(401, exclusive.get("/api/portal/ordens-servico/" + nextId + "/atualizacoes").statusCode());
+        assertEquals(2, mapper.readTree(fixture.owner().get(path + "/atualizacoes").body()).size());
+        assertEquals("Dono", mapper.readTree(fixture.owner().get(path + "/encerramento").body()).get("encerramento").get("autorNome").asText());
+    }
+
     private UUID insertPhoto(Fixture fixture, UUID ownerId, String stage, boolean published,
                              String name, String age) {
         UUID id = UUID.randomUUID();

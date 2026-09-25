@@ -274,8 +274,8 @@ sem disparos em massa ou listas externas. SMTP confirma aceitação, não leitur
 Deduplicação impede novos registros/replays; uma queda após aceitação SMTP e antes
 do commit ainda pode duplicar entrega (sem garantia exactly-once).
 
-Contratos para pronto/encerramento/avaliação estão preparados; gatilhos específicos
-serão conectados nas tarefas 17/18. Códigos de acesso/verificação e recuperação
+Pronto para retirada e encerramento geram avisos transacionais desde a tarefa 17.
+O gatilho de avaliação permanece na tarefa 18. Códigos de acesso/verificação e recuperação
 preservam o transporte síncrono e a expiração existentes; segredos não são gravados
 na fila comercial. E2E da central/portal com API simulada:
 `npx playwright test e2e/notifications.spec.ts e2e/portal.spec.ts` (frontend ativo).
@@ -316,6 +316,26 @@ No ambiente local, `localhost` funciona somente no próprio computador; para o
 cliente acessar, use o endereço HTTPS público do sistema em uma implantação configurada.
 
 Documentação e testes: [tarefa 16](tasks/prd-compartilhamento-whatsapp/16_task.md).
+
+### Encerrar atendimento e registrar retorno
+
+No detalhe da OS, **Revisar encerramento** consulta as pendências atuais. Selecione
+entrega ou cancelamento (este exige motivo), resolva os adicionais ou marque seu
+cancelamento explícito e confirme o encerramento definitivo. Pronto para retirada
+continua sendo uma OS ativa; não representa entrega.
+
+Depois de encerrar, alterações, fotos, vistorias e decisões ficam bloqueadas.
+O histórico interno e as decisões anteriores permanecem disponíveis. Links da OS
+e códigos de aprovação pendentes são revogados, inclusive para sessões abertas.
+A sessão por identidade do cliente pode permanecer válida, mas não abre a OS encerrada.
+
+**Abrir nova OS para este veículo** confere o vínculo atual e prepara um atendimento
+novo, exigindo relato e quilometragem novos. O portal por identidade passa a mostrar
+a nova OS quando consultado novamente, se o vínculo continuar válido. Links antigos
+nunca redirecionam para a nova visita. Resumo público e avaliação pertencem à tarefa 18.
+
+Migração V15 e endpoints `GET/POST /api/ordens-servico/{id}/encerramento`.
+Evidências: [validação da tarefa 17](tasks/prd-encerramento-retorno/validacao.md).
 
 ### Docker não está disponível
 
