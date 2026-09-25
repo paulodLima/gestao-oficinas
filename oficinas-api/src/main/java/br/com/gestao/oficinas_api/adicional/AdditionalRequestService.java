@@ -4,6 +4,8 @@ import br.com.gestao.oficinas_api.identidade.ApiException;
 import br.com.gestao.oficinas_api.identidade.Identidade;
 import br.com.gestao.oficinas_api.ordem.ServiceOrder;
 import br.com.gestao.oficinas_api.ordem.ServiceOrderService;
+import br.com.gestao.oficinas_api.notificacoes.NotificationService;
+import br.com.gestao.oficinas_api.notificacoes.NotificationEvent;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -21,13 +23,15 @@ public class AdditionalRequestService {
     private final ServiceOrderService orders;
     private final AdditionalPolicy policy;
     private final Clock clock;
+    private final NotificationService notifications;
 
     public AdditionalRequestService(AdditionalRequestRepository repository, ServiceOrderService orders,
-                                    AdditionalPolicy policy, Clock clock) {
+                                    AdditionalPolicy policy, Clock clock, NotificationService notifications) {
         this.repository = repository;
         this.orders = orders;
         this.policy = policy;
         this.clock = clock;
+        this.notifications = notifications;
     }
 
     public List<AdditionalRequest> list(Identidade owner, UUID orderId) {
@@ -64,8 +68,10 @@ public class AdditionalRequestService {
         requireState(current, AdditionalRequest.Status.RASCUNHO, "A solicitação já foi enviada.");
         AdditionalRequest.Version version = currentVersion(current);
         repository.validatePhotos(owner.oficinaId(), orderId, version.fotoIds(), true);
-        return repository.send(owner.oficinaId(), owner.id(), orderId, requestId,
+        AdditionalRequest result = repository.send(owner.oficinaId(), owner.id(), orderId, requestId,
             input.expectedVersion(), version.id());
+        notifications.record(owner.oficinaId(), orderId, NotificationEvent.ADICIONAL_ENVIADO, version.id().toString());
+        return result;
     }
 
     @Transactional

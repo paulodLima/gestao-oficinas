@@ -12,7 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.PostgreSQLContainer;
+import br.com.gestao.oficinas_api.support.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.doNothing;
 @SpringBootTest
 @Testcontainers
 class AdditionalDecisionIntegrationTest {
-    @Container static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+    @Container static final TestPostgres postgres = new TestPostgres();
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
@@ -47,7 +47,7 @@ class AdditionalDecisionIntegrationTest {
         jdbc.update("INSERT INTO veiculo(id,oficina_id,placa,marca,modelo) VALUES (?,?,?,?,?)",
             vehicle, shop, "BRA1E23", "Volkswagen", "T-Cross");
         jdbc.update("INSERT INTO ordem_servico(id,oficina_id,numero,cliente_id,veiculo_id,relato_inicial,entrada_em,km_entrada,status,criado_por) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            order, shop, 1, customer, vehicle, "Ruído dianteiro", Instant.now(), 1000, "AGUARDANDO_APROVACAO", owner);
+            order, shop, 1, customer, vehicle, "Ruído dianteiro", java.sql.Timestamp.from(Instant.now()), 1000, "AGUARDANDO_APROVACAO", owner);
         jdbc.update("INSERT INTO solicitacao_adicional(id,oficina_id,ordem_servico_id,estado,criado_por) VALUES (?,?,?,'ENVIADA',?)",
             request, shop, order, owner);
         jdbc.update("INSERT INTO adicional_versao(id,solicitacao_id,oficina_id,ordem_servico_id,numero,estado,problema,justificativa,impacto_prazo,enviada_em) VALUES (?,?,?,?,1,'ENVIADA',?,?,?,now())",
@@ -62,7 +62,7 @@ class AdditionalDecisionIntegrationTest {
         String secret = "development-only-secret-change-me";
         String hash = hmac(secret, challenge, "123456");
         jdbc.update("INSERT INTO adicional_desafio(id,oficina_id,cliente_id,ordem_servico_id,solicitacao_id,versao_id,versao_solicitacao,codigo_hash,expira_em) VALUES (?,?,?,?,?,?,?,?,?)",
-            challenge, shop, customer, order, request, version, 0, hash, Instant.now().plusSeconds(600));
+            challenge, shop, customer, order, request, version, 0, hash, java.sql.Timestamp.from(Instant.now().plusSeconds(600)));
         var input = new AdditionalDecisionService.Confirmation(challenge, "123456", 0,
             List.of(new AdditionalDecisionService.BlockDecision("grupo:freios",
                 AdditionalDecisionService.Decision.APROVADO)), "Autorizado");

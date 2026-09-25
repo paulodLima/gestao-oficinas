@@ -218,6 +218,11 @@ Antes de executar API/app diretamente, pare as respectivas instâncias Docker pa
 
 Na pasta `oficinas-api`, execute `mvn test` (Docker deve estar disponível para o PostgreSQL temporário do Testcontainers).
 
+Sem Docker, use `mvn -Dtest.database=embedded test`: executa a mesma suíte contra
+PostgreSQL 17 nativo, temporário e restrito ao localhost. Os binários são dependências
+de teste Maven; não substitui o banco da aplicação nem instala um serviço no sistema.
+Em Linux, execute como usuário não-root. Nenhum teste integrado envia e-mails reais.
+
 Na pasta `oficinas-app`:
 
 ```powershell
@@ -245,7 +250,35 @@ novamente; o painel informa o instante da consulta e não faz atualização em t
 No detalhe, **Previsão de conclusão** permite informar ou remover uma estimativa, sempre com
 motivo público e próxima ação. O histórico é preservado. Datas usam o fuso da oficina.
 Prontas para retirada e ordens sem previsão não contam como atraso de execução.
-Integração do cliente e notificações de mudança de prazo ficam para as respectivas tarefas.
+O portal do cliente e os avisos de mudança de prazo já estão integrados.
+
+## Central de avisos e e-mails
+
+Acesse **Avisos** no menu ou `/notificacoes`. Abertura de OS, envio de adicionais,
+decisão do cliente e mudanças de previsão geram avisos privados da oficina.
+A central permite filtrar não lidos, marcar leitura e acompanhar falhas de envio.
+Fotos e pequenas atualizações da linha do tempo não geram e-mails individuais.
+
+E-mails comerciais são enfileirados na transação da operação somente para o cliente
+responsável ativo com e-mail verificado. Um worker entrega após o commit e revalida
+o contato antes de cada tentativa. Alteração/desativação do contato cancela o envio.
+Falha SMTP não desfaz a OS: há tentativa inicial e retentativas após 1, 5, 15 e
+60 minutos. Após a quinta falha, **Reenviar e-mail** permite iniciar novo ciclo,
+preservando o aviso e o histórico, com intervalo mínimo de um minuto.
+
+Configure SMTP e `MAIL_FROM` de verdade: falta de provedor nunca é tratada como
+sucesso. Use Mailpit no desenvolvimento. `APP_NOTIFICATIONS_ENABLED=false` pausa o
+worker sem apagar a fila; `APP_NOTIFICATIONS_POLL_MS` controla a consulta (10000 ms
+por padrão, até 20 mensagens por ciclo). Ajuste a operação às regras do provedor,
+sem disparos em massa ou listas externas. SMTP confirma aceitação, não leitura.
+Deduplicação impede novos registros/replays; uma queda após aceitação SMTP e antes
+do commit ainda pode duplicar entrega (sem garantia exactly-once).
+
+Contratos para pronto/encerramento/avaliação estão preparados; gatilhos específicos
+serão conectados nas tarefas 17/18. Códigos de acesso/verificação e recuperação
+preservam o transporte síncrono e a expiração existentes; segredos não são gravados
+na fila comercial. E2E da central/portal com API simulada:
+`npx playwright test e2e/notifications.spec.ts e2e/portal.spec.ts` (frontend ativo).
 
 ## Antes de publicar em produção
 

@@ -1,0 +1,52 @@
+<main class="notice-page">
+  <header>
+    <div><p class="eyebrow">COMUNICAÇÃO DA OFICINA</p><h1>Central de avisos</h1>
+      <p class="intro">Os movimentos do serviço, em um só lugar.</p></div>
+    <button class="refresh" type="button" (click)="load(data()?.page ?? 0)" [disabled]="loading() || !!busy()">Atualizar avisos</button>
+  </header>
+  <aside class="delivery-note"><span aria-hidden="true">↗</span><p><strong>Serviço salvo. Comunicação acompanhada.</strong>
+    Uma falha de e-mail não desfaz a operação. Envio aceito pelo servidor não confirma a leitura do cliente.</p></aside>
+  <div class="toolbar" aria-label="Filtrar avisos">
+    <button type="button" [attr.aria-pressed]="!unread()" (click)="filter(false)" [disabled]="!!busy()">Todos</button>
+    <button type="button" [attr.aria-pressed]="unread()" (click)="filter(true)" [disabled]="!!busy()">Não lidos</button>
+    @if (data(); as result) { <span class="count">{{ result.totalElements }} avisos</span> }
+  </div>
+  @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+  @if (feedback()) { <p class="feedback" role="status">{{ feedback() }}</p> }
+  <section class="feed" aria-label="Avisos da oficina" [attr.aria-busy]="loading()">
+    @if (loading()) { <p class="empty" role="status">Carregando avisos…</p> }
+    @if (!loading() && data(); as result) {
+      @for (notice of result.items; track notice.id) {
+        <article [class.unread]="!notice.lida">
+          <div class="marker" aria-hidden="true">{{ notice.lida ? '✓' : '•' }}</div>
+          <div class="content">
+            <div class="notice-heading"><h2>{{ notice.titulo }}</h2><span class="read-state">{{ notice.lida ? 'Lido' : 'Não lido' }}</span></div>
+            <p class="message">{{ notice.mensagem }}</p>
+            <time [attr.datetime]="notice.createdAt">{{ notice.createdAt | date:'dd/MM/yyyy HH:mm' }}</time>
+            <div class="email-info"><span class="badge" [class.failed]="notice.emailEstado === 'FALHOU'">{{ status(notice) }}</span>
+              @if (notice.tentativas) { <span>{{ notice.tentativas }} tentativa(s)</span> }
+            </div>
+            @if (notice.emailEstado === 'PENDENTE' && notice.ultimoErro) {
+              <p class="retry-note">Provedor indisponível. Nova tentativa: {{ notice.proximaTentativaEm | date:'dd/MM HH:mm' }}.</p>
+            }
+          </div>
+          <div class="actions">
+            @if (!notice.lida) { <button type="button" (click)="act(notice, false)" [disabled]="!!busy()" [attr.aria-label]="'Marcar como lido: ' + notice.titulo">Marcar como lido</button> }
+            @if (notice.emailEstado === 'FALHOU') { <button type="button" class="retry" (click)="act(notice, true)" [disabled]="!!busy()" [attr.aria-label]="'Reenviar e-mail: ' + notice.titulo">Reenviar e-mail</button> }
+            @if (busy() === notice.id) { <span role="status">Salvando…</span> }
+          </div>
+        </article>
+      } @empty {
+        <div class="empty"><span class="empty-icon" aria-hidden="true">✓</span><h2>{{ unread() ? 'Tudo em dia' : 'Nenhum aviso por enquanto' }}</h2>
+          <p>{{ unread() ? 'Você já leu os avisos disponíveis.' : 'Aberturas, adicionais, decisões e mudanças de previsão aparecerão aqui.' }}</p></div>
+      }
+      @if (result.totalPages > 1) {
+        <nav class="pagination" aria-label="Paginação dos avisos">
+          <button type="button" (click)="load(result.page - 1)" [disabled]="result.page === 0 || !!busy()">Anterior</button>
+          <span>Página {{ result.page + 1 }} de {{ result.totalPages }}</span>
+          <button type="button" (click)="load(result.page + 1)" [disabled]="result.page + 1 >= result.totalPages || !!busy()">Próxima</button>
+        </nav>
+      }
+    }
+  </section>
+</main>

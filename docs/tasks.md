@@ -609,11 +609,11 @@ Avisos de abertura, adicional, decisão, mudança relevante de prazo, pronto, en
 
 ## Subtarefas
 
-- [ ] 15.1 Reutilizar envio básico da tarefa 2 e implementar avisos internos/eventos comerciais.
-- [ ] 15.2 Persistir notificações, deduplicação, falhas e tentativas de reenvio.
-- [ ] 15.3 Conectar abertura, adicional, decisão e prazo; preparar contratos para pronto/encerramento/avaliação.
-- [ ] 15.4 Criar central de avisos e modelos de e-mail sem divulgar dados internos.
-- [ ] 15.5 Testes unitários: destinatário e deduplicação; integração: falha do provedor não desfaz OS; eventos de entrega/avaliação validados nas tarefas 17/18.
+- [x] 15.1 Reutilizar envio básico da tarefa 2 e implementar avisos internos/eventos comerciais.
+- [x] 15.2 Persistir notificações, deduplicação, falhas e tentativas de reenvio.
+- [x] 15.3 Conectar abertura, adicional, decisão e prazo; preparar contratos para pronto/encerramento/avaliação.
+- [x] 15.4 Criar central de avisos e modelos de e-mail sem divulgar dados internos.
+- [x] 15.5 Testes unitários: destinatário e deduplicação; integração: falha do provedor não desfaz OS; eventos de entrega/avaliação validados nas tarefas 17/18.
 
 ## Critérios de aceite
 
@@ -627,7 +627,10 @@ Avisos de abertura, adicional, decisão, mudança relevante de prazo, pronto, en
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: implementada e validada em 25/09/2026. Branch `codex/tarefa-15-notificacoes`.
+91 testes Java com PostgreSQL real, 49 Angular, build e 8 E2E desktop/mobile aprovados.
+Revisão e limites operacionais: `tasks/prd-notificacoes/15_task_review.md` e `validacao.md`.
+SMTP externo não validado; gatilhos de entrega/avaliação continuam nas tarefas 17/18.
 
 ---
 

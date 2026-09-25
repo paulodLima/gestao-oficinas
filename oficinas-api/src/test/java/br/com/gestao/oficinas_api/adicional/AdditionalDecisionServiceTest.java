@@ -23,6 +23,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class AdditionalDecisionServiceTest {
     @Mock JdbcTemplate jdbc;
     @Mock TransactionalEmail email;
+    @Mock br.com.gestao.oficinas_api.notificacoes.NotificationService notifications;
 
     @Test void rejectsConfirmationWithoutIdempotencyKeyBeforeDatabaseAccess() {
         AdditionalDecisionService service = service();
@@ -49,6 +50,6 @@ class AdditionalDecisionServiceTest {
             new AuthProperties(URI.create("http://localhost:8080"), false,
                 "segredo-de-testes-com-tamanho-suficiente"),
             new AdditionalDecisionPolicy(),
-            Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC), notifications);
     }
 }

@@ -17,6 +17,9 @@ import { ShopProfile, ShopService } from '../oficina/shop.service';
       </a>
 
       <nav>
+        <a routerLink="/notificacoes" routerLinkActive="active" aria-label="Central de avisos">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v5l-2 3v2h16v-2l-2-3V8a6 6 0 0 0-6-6Zm0 20a3 3 0 0 0 3-3H9a3 3 0 0 0 3 3Z"/></svg><span>Avisos</span>
+        </a>
         <a routerLink="/painel" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg><span>Painel</span>
         </a>

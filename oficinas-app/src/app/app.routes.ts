@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
+  { path: 'notificacoes', canActivate: [authGuard], loadComponent: () => import('./notificacoes/notification-page.component').then(m => m.NotificationPageComponent) },
   { path: 'painel', canActivate: [authGuard], loadComponent: () => import('./painel/dashboard.component').then(m => m.DashboardComponent) },
   { path: 'perfil', canActivate: [authGuard], loadComponent: () => import('./oficina/shop-page.component').then(m => m.ShopPageComponent) },
   { path: 'clientes', canActivate: [authGuard], loadComponent: () => import('./cadastro/customer-vehicle-page.component').then(m => m.CustomerVehiclePageComponent), data: { pane: 'clientes' } },

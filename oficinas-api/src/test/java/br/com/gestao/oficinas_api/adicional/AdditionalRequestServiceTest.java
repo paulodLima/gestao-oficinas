@@ -25,6 +25,7 @@ import static org.mockito.Mockito.*;
 class AdditionalRequestServiceTest {
     @Mock AdditionalRequestRepository repository;
     @Mock ServiceOrderService orders;
+    @Mock br.com.gestao.oficinas_api.notificacoes.NotificationService notifications;
     private AdditionalRequestService service;
     private final UUID ownerId = UUID.randomUUID();
     private final UUID shopId = UUID.randomUUID();
@@ -36,7 +37,7 @@ class AdditionalRequestServiceTest {
 
     @BeforeEach void setUp() {
         service = new AdditionalRequestService(repository, orders, new AdditionalPolicy(),
-            Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC));
+            Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC), notifications);
         when(orders.order(owner, orderId)).thenReturn(order(ServiceOrderStatus.EM_DIAGNOSTICO));
     }
 
@@ -56,6 +57,8 @@ class AdditionalRequestServiceTest {
         service.send(owner, orderId, requestId, new AdditionalRequestService.VersionInput(2L));
         verify(repository).validatePhotos(shopId, orderId, List.of(photoId), true);
         verify(repository).send(shopId, ownerId, orderId, requestId, 2, versionId);
+        verify(notifications).record(shopId, orderId,
+            br.com.gestao.oficinas_api.notificacoes.NotificationEvent.ADICIONAL_ENVIADO, versionId.toString());
     }
 
     @Test void replacesSentVersionWithoutOverwritingHistory() {
