@@ -1,5 +1,5 @@
-import { DOCUMENT } from '@angular/common';
-import { Component, Input, OnDestroy, computed, inject, signal } from '@angular/core';
+
+import { Component, Input, OnDestroy, computed, inject, signal, DOCUMENT } from '@angular/core';
 import { ServiceOrder, ServiceOrderService } from './service-order.service';
 import { buildTrackingMessage, buildTrackingUrl, buildWhatsAppUrl } from './manual-share';
 

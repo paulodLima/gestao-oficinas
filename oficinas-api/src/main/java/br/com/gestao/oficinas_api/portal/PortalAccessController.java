@@ -244,9 +244,10 @@ public class PortalAccessController {
         PublicPhoto photo = rows.getFirst();
         boolean original = "original".equalsIgnoreCase(tamanho);
         String key = original || photo.thumb() == null ? photo.key() : photo.thumb();
+        var display = storage.readDisplay(key);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-            .contentType(MediaType.parseMediaType(original || photo.thumb() == null ? photo.type() : "image/jpeg"))
-            .body(storage.read(key));
+            .contentType(MediaType.parseMediaType(display.contentType()))
+            .body(display.bytes());
     }
 
     @PostMapping("/logout")

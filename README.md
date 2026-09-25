@@ -2,12 +2,14 @@
 
 Projeto para gestão de oficinas, composto por uma API Spring Boot, uma aplicação web Angular e um banco de dados PostgreSQL.
 
+Validação integrada do MVP, matriz móvel emulada e ensaio de backup/restauração: [guia de QA isolado](docker/QA.md).
+
 ## Tecnologias
 
 - Java 21 e Spring Boot
 - Spring Data JPA
 - PostgreSQL 17
-- Angular 19 com SSR
+- Angular 20.3 com SSR
 - Docker e Docker Compose
 
 ## Estrutura do projeto
@@ -177,7 +179,7 @@ Também é possível executar o banco pelo Docker e iniciar backend e frontend d
 
 - Java 21
 - Maven 3.9 ou superior
-- Node.js 20 ou superior
+- Node.js 20.19+, 22.12+ ou 24 (recomendado: Node 22 LTS)
 - npm
 
 ### 1. Inicie o PostgreSQL e o e-mail local
@@ -286,7 +288,7 @@ O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banc
 
 O proxy Express sobrescreve o IP encaminhado; a API só o aceita do host definido em `APP_AUTH_TRUSTED_PROXY_HOST` (`app` no Compose). Se houver outro balanceador, configure a cadeia confiável antes de publicar; não habilite confiança irrestrita em cabeçalhos. Não exponha banco nem Mailpit publicamente.
 
-Há alertas de segurança nas dependências existentes do Angular 19. Atualização de versão principal e validação correspondente são pendências antes de produção, fora da tarefa 2. Consulte [a validação](docs/task-2-validacao.md).
+A tarefa 20 atualizou Angular 19 para Angular 20.3 corrigido, com autorização do responsável. A auditoria npm de produção em 25/09/2026 ficou sem alertas; restam cinco moderados na árvore de ferramentas de desenvolvimento. Consulte os resultados e limites no [relatório da tarefa 20](tasks/prd-validacao-mvp/qa-report.md). A [validação da tarefa 2](docs/task-2-validacao.md) é um registro histórico, anterior à atualização.
 
 ## Comunicação entre os serviços
 

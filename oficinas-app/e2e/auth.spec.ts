@@ -21,9 +21,9 @@ test('cadastro, login, recuperação SMTP, troca de senha e logout', async ({ pa
   await expect(page.getByRole('alert')).toContainText('inválidos');
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar na oficina' }).click();
-  await expect(page).toHaveURL(/\/inicio$/);
+  await expect(page).toHaveURL(/\/painel$/);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Oficina de teste' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'O ritmo da oficina.' })).toBeVisible();
   const cookies = await page.context().cookies();
   expect(cookies.find(c => c.name === 'OFICINAS_SESSION')).toMatchObject({ httpOnly: true, sameSite: 'Lax' });
   const recovery = await page.context().newPage();
@@ -31,11 +31,13 @@ test('cadastro, login, recuperação SMTP, troca de senha e logout', async ({ pa
   await recovery.getByLabel('E-mail', { exact: true }).fill(email);
   await recovery.getByRole('button', { name: 'Enviar link de recuperação' }).click();
   await expect(recovery.getByRole('status')).toBeVisible();
-  const messages = await (await request.get('http://localhost:8025/api/v1/messages')).json();
+  const mailpit = process.env['MAILPIT_URL'] || 'http://localhost:8025';
+  const messages = await (await request.get(`${mailpit}/api/v1/messages`)).json();
   const message = messages.messages.find((m: MailSummary) => m.To.some(to => to.Address === email));
   expect(message).toBeTruthy();
-  const mail = await (await request.get(`http://localhost:8025/api/v1/message/${message.ID}`)).json();
-  const link = mail.Text.match(/http:\/\/localhost:4200\/redefinir-senha#token=[A-Za-z0-9_-]+/)[0];
+  const mail = await (await request.get(`${mailpit}/api/v1/message/${message.ID}`)).json();
+  const link = mail.Text.match(/https?:\/\/[^\s]+\/redefinir-senha#token=[A-Za-z0-9_-]+/)[0];
+  expect(new URL(link).origin).toBe(new URL(page.url()).origin);
   await recovery.goto(link);
   await expect(recovery).toHaveURL(/\/redefinir-senha$/);
   await recovery.getByLabel('Nova senha', { exact: true }).fill('Nova-senha-segura-456');
@@ -48,7 +50,7 @@ test('cadastro, login, recuperação SMTP, troca de senha e logout', async ({ pa
   await page.getByLabel('E-mail', { exact: true }).fill(email);
   await page.getByLabel('Senha', { exact: true }).fill('Nova-senha-segura-456');
   await page.getByRole('button', { name: 'Entrar na oficina' }).click();
-  await expect(page).toHaveURL(/\/inicio$/);
+  await expect(page).toHaveURL(/\/painel$/);
   await page.getByRole('button', { name: 'Sair da conta' }).click();
   await expect(page).toHaveURL(/\/entrar$/);
   await page.goto('/inicio');

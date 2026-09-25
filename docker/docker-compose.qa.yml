@@ -1,0 +1,72 @@
+name: gestao-oficinas-qa
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: oficinas_qa
+      POSTGRES_USER: qa
+      POSTGRES_PASSWORD: qa-local-only
+    volumes:
+      - qa-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa -d oficinas_qa"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    networks: [default, preview]
+    ports:
+      - "127.0.0.1:18025:8025"
+
+  api:
+    image: gestao-oficinas-qa-api:local
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/auth/csrf"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    build: ../oficinas-api
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/oficinas_qa
+      SPRING_DATASOURCE_USERNAME: qa
+      SPRING_DATASOURCE_PASSWORD: qa-local-only
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_FROM: oficinas@qa.test
+      PUBLIC_URL: http://localhost:14220
+      CODE_SECRET: qa-only-isolated-environment-secret-not-for-production
+      APP_AUTH_TRUSTED_PROXY_HOST: app
+      APP_NOTIFICATIONS_POLL_MS: 1000
+      PHOTO_STORAGE_PATH: /data/photos
+    volumes:
+      - qa-photos:/data/photos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  app:
+    image: gestao-oficinas-qa-app:local
+    networks: [default, preview]
+    build: ../oficinas-app
+    environment:
+      PORT: 4000
+      API_URL: http://api:8080
+    ports:
+      - "127.0.0.1:14220:4000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  default:
+    internal: true
+  preview:
+
+volumes:
+  qa-postgres:
+  qa-photos:

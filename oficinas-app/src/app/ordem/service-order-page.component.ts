@@ -10,9 +10,15 @@ import { OrderShareComponent } from './order-share.component';
 import { OrderClosureComponent } from './order-closure.component';
 import { ReviewInvitationComponent } from '../avaliacao/review-invitation.component';
 
+interface PhotoUpload {
+  id: string; orderId: string; stage: ServiceOrderStatus; file: File | null;
+  name: string; progress: number; error: string; pending: boolean; published: boolean;
+}
+
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
   'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
   'PRONTO_PARA_RETIRADA'];
+const MAX_CONCURRENT_UPLOADS = 3;
 const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
   RECEBIDO: 0, EM_DIAGNOSTICO: 10, AGUARDANDO_APROVACAO: 20, AGUARDANDO_PECAS: 30,
   EM_MANUTENCAO: 40, FUNILARIA: 42, PINTURA: 44, EM_MONTAGEM: 50, EM_TESTES: 60,
@@ -30,6 +36,8 @@ export class ServiceOrderPageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly registrations = inject(CustomerVehicleService);
   private readonly builder = inject(FormBuilder);
+  private activeUploads = 0;
+  private readonly uploadWaiters: Array<() => void> = [];
   readonly orders = signal<ServiceOrder[]>([]);
   readonly customers = signal<Customer[]>([]);
   readonly vehicles = signal<Vehicle[]>([]);
@@ -37,7 +45,10 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly timeline = signal<ServiceOrderEvent[]>([]);
   readonly forecasts = signal<ServiceOrderForecast[]>([]);
   readonly photos = signal<ServicePhoto[]>([]);
-  readonly uploads = signal<{ name: string; progress: number; error: string }[]>([]);
+  readonly uploads = signal<PhotoUpload[]>([]);
+  readonly selectedUploads = computed(() => this.uploads().filter(item => item.orderId === this.selected()?.id));
+  readonly photosError = signal('');
+  readonly publishPhotos = this.builder.nonNullable.control(false);
   readonly inspections = signal<Inspection[]>([]);
   readonly correctingInspection = signal(false);
   readonly hasInspectionDraft = computed(() => this.inspections().some(item => item.estado === 'RASCUNHO'));
@@ -105,6 +116,7 @@ export class ServiceOrderPageComponent implements OnInit {
     finally { this.loading.set(false); }
   }
   newOrder() {
+    this.resetPhotoView();
     this.selected.set(null); this.timeline.set([]); this.forecasts.set([]); this.clearMessages();
     this.form.reset({ clienteId: '', veiculoId: '', relatoInicial: '',
       entradaEm: this.localDateTime(new Date()), kmEntrada: '', previsaoEm: '' });
@@ -150,6 +162,7 @@ export class ServiceOrderPageComponent implements OnInit {
     if (this.search.invalid || this.busy()) return;
     await this.perform(async () => {
       const result = await this.service.orders(this.search.value);
+      this.resetPhotoView();
       this.orders.set(result.items); this.selected.set(result.items[0] ?? null);
       this.resetWorkflowForms(); this.timeline.set([]); this.forecasts.set([]);
       if (this.selected()) { await this.loadHistory(this.selected()!.id); await this.loadPhotos(this.selected()!.id); }
@@ -158,6 +171,7 @@ export class ServiceOrderPageComponent implements OnInit {
   async selectOrder(order: ServiceOrder) {
     await this.perform(async () => {
       const detail = await this.service.order(order.id);
+      this.resetPhotoView();
       this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id); await this.loadInspection(detail.id);
     }, 'Detalhes atualizados.');
   }
@@ -172,6 +186,7 @@ export class ServiceOrderPageComponent implements OnInit {
     };
     await this.perform(async () => {
       const opened = await this.service.create(input);
+      this.resetPhotoView();
       this.orders.update(items => [opened, ...items]); this.selected.set(opened);
       this.resetWorkflowForms(); await this.loadHistory(opened.id); await this.loadPhotos(opened.id); await this.loadInspection(opened.id);
     }, 'Ordem de serviço aberta com sucesso.');
@@ -275,19 +290,51 @@ export class ServiceOrderPageComponent implements OnInit {
   selectPhotos(event: Event) {
     const order = this.selected(); const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []).slice(0, 20); input.value = '';
-    if (!order || !files.length) return;
+    if (!order || !this.isActive(order) || !files.length) return;
     if (files.some(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024)) { this.error.set('Selecione JPEG, PNG ou WebP de até 10 MiB por foto.'); return; }
-    this.uploads.set(files.map(file => ({ name: file.name, progress: 0, error: '' }))); void this.uploadQueue(order, files);
+    const entries = files.map(file => ({ id: crypto.randomUUID(), orderId: order.id, stage: order.status,
+      file, name: file.name, progress: 0, error: '', pending: true, published: this.publishPhotos.value }));
+    this.uploads.update(items => [...items.filter(item => item.file), ...entries]);
+    void this.uploadQueue(entries);
   }
-  private async uploadQueue(order: ServiceOrder, files: File[]) {
-    let next = 0; const worker = async () => { while (next < files.length) await this.uploadOne(order, files[next++]); };
-    await Promise.all(Array.from({ length: Math.min(3, files.length) }, worker)); await this.loadPhotos(order.id);
+  private async uploadQueue(entries: PhotoUpload[]) {
+    await Promise.all(entries.map(entry => this.uploadQueued(entry)));
+    await this.loadPhotos(entries[0].orderId);
   }
-  private async uploadOne(order: ServiceOrder, file: File) {
-    try { const request = await this.service.uploadPhoto(order.id, file, order.status, crypto.randomUUID()); await new Promise<void>((resolve, reject) => request.subscribe({
-      next: event => { if (event.type === HttpEventType.UploadProgress) this.setUpload(file.name, Math.round(100 * event.loaded / (event.total || file.size))); if (event.type === HttpEventType.Response) { this.setUpload(file.name, 100); resolve(); } },
-      error: error => { this.setUpload(file.name, 0, error?.error?.detail ?? 'Falha ao enviar.'); reject(error); }
-    })); } catch { /* falhas ficam visíveis sem reenviar fotos concluídas */ }
+  private async uploadQueued(entry: PhotoUpload) {
+    if (this.activeUploads >= MAX_CONCURRENT_UPLOADS) {
+      await new Promise<void>(resolve => this.uploadWaiters.push(resolve));
+    } else {
+      this.activeUploads++;
+    }
+    try { await this.uploadOne(entry); }
+    finally {
+      const next = this.uploadWaiters.shift();
+      if (next) next(); else this.activeUploads--;
+    }
+  }
+  async retryPhoto(id: string) {
+    const entry = this.uploads().find(item => item.id === id);
+    const order = this.selected();
+    if (!entry?.file || entry.pending || !order || order.id !== entry.orderId || !this.isActive(order)) return;
+    this.setUpload(id, { pending: true, error: '', progress: 0 });
+    await this.uploadQueued(entry); await this.loadPhotos(entry.orderId);
+  }
+  private async uploadOne(entry: PhotoUpload) {
+    if (!entry.file) return;
+    try {
+      const request = await this.service.uploadPhoto(entry.orderId, entry.file, entry.stage, entry.id, entry.published);
+      await new Promise<void>((resolve, reject) => request.subscribe({
+        next: event => {
+          if (event.type === HttpEventType.UploadProgress) this.setUpload(entry.id, { progress: Math.round(100 * event.loaded / (event.total || entry.file!.size)) });
+          if (event.type === HttpEventType.Response) { this.setUpload(entry.id, { progress: 100, pending: false, file: null }); resolve(); }
+        }, error: reject
+      }));
+    } catch (error) {
+      this.setUpload(entry.id, { pending: false, progress: 0, error: error instanceof HttpErrorResponse
+        ? error.error?.detail ?? 'Falha ao enviar. Tente novamente sem selecionar a foto de novo.'
+        : 'Falha ao preparar o envio. Tente novamente.' });
+    }
   }
   async removePhoto(photo: ServicePhoto) { const order = this.selected(); if (!order || !confirm('Remover esta foto do acompanhamento?')) return; await this.perform(async () => { await this.service.deletePhoto(order.id, photo.id); await this.loadPhotos(order.id); }, 'Foto removida e registrada na auditoria.'); }
   photoUrl(photo: ServicePhoto) { const order = this.selected(); return order ? this.service.photoUrl(order.id, photo.id, photo.miniaturaDisponivel) : ''; }
@@ -326,9 +373,14 @@ export class ServiceOrderPageComponent implements OnInit {
     this.timeline.set(timeline); this.forecasts.set(forecasts);
   }
   private async loadPhotos(id: string) {
-    try { this.photos.set(await this.service.photos(id)); }
-    catch { this.photos.set([]); }
+    try {
+      const photos = await this.service.photos(id);
+      if (this.selected()?.id === id) { this.photos.set(photos); this.photosError.set(''); }
+    } catch {
+      if (this.selected()?.id === id) this.photosError.set('Não foi possível carregar as fotos. Tente novamente.');
+    }
   }
+  async reloadPhotos() { const id = this.selected()?.id; if (id) await this.loadPhotos(id); }
   private async loadInspection(id: string) {
     this.inspectionForm.reset({ quilometragem: '', combustivel: '', objetos: '', avarias: '', observacoes: '',
       frente: '', traseira: '', lateralEsquerda: '', lateralDireita: '', painel: '', detalhes: '' }, { emitEvent: false });
@@ -365,10 +417,13 @@ export class ServiceOrderPageComponent implements OnInit {
     if (order) sessionStorage.setItem(this.inspectionKey(order.id), JSON.stringify(this.inspectionData()));
   }
   private inspectionKey(id: string) { return `vistoria:${id}`; }
-  private setUpload(name: string, progress: number, error = '') { this.uploads.update(items => items.map(item => item.name === name ? { ...item, progress, error } : item)); }
+  private setUpload(id: string, changes: Partial<PhotoUpload>) { this.uploads.update(items => items.map(item => item.id === id ? { ...item, ...changes } : item)); }
   private replaceOrder(order: ServiceOrder) {
     this.selected.set(order);
     this.orders.update(items => items.map(item => item.id === order.id ? order : item));
+  }
+  private resetPhotoView() {
+    this.photos.set([]); this.photosError.set(''); this.publishPhotos.setValue(false);
   }
   private resetWorkflowForms() {
     this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });

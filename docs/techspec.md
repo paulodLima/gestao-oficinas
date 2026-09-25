@@ -6,7 +6,7 @@ Versão 1.1 · Fonte funcional: [prompt.md](prompt.md) · Planejamento: [tasks.m
 
 Esta especificação define a implementação das tarefas 2–20. As tarefas 2–5 implementam identidade, perfil da oficina, cadastros e abertura/consulta de ordens de serviço; os demais módulos permanecem contratos a implementar.
 
-Inventário atualizado: API Maven com Spring Boot 4.1.1, Java 21, Spring Security, Spring Session JDBC, Flyway, Spring Mail e PostgreSQL. Identidade usa JdbcTemplate com SQL parametrizado e transações explícitas para consumir tokens e invalidar sessões atomicamente; JPA continua disponível para próximos módulos. Angular 19/TypeScript 5.6/Express 4 com identidade, perfil da oficina, cadastros e ordens de serviço. Docker usa PostgreSQL 17, Java 21 e Node 22; não exige Java/Node no host. Fotos e os módulos operacionais restantes ainda não foram implementados.
+Inventário atualizado na tarefa 20: API Maven com Spring Boot 4.1.1, Java 21, Spring Security, Spring Session JDBC, Flyway, Spring Mail e PostgreSQL. Identidade usa JdbcTemplate com SQL parametrizado e transações explícitas para consumir tokens e invalidar sessões atomicamente; JPA continua disponível. Angular 20.3/TypeScript 5.9/Express 4 com os módulos do MVP. Docker usa PostgreSQL 17, Java 21 e Node 22; não exige Java/Node no host. A migração Angular 19→20 foi autorizada pelo responsável em 25/09/2026 e validada na tarefa 20.
 
 Compose possui postgres, api, app e Mailpit. PostgreSQL tem volume e healthcheck; API aguarda banco saudável; app aguarda início da API, não prontidão. API_URL agora define o destino privado do proxy Express; /api mantém mesma origem no navegador. Evidências: [task-1-validacao.md](task-1-validacao.md) e [task-2-validacao.md](task-2-validacao.md).
 
@@ -17,7 +17,7 @@ Compose possui postgres, api, app e Mailpit. PostgreSQL tem volume e healthcheck
 - Serviço TransactionalEmail é reutilizável para os códigos da tarefa 10. SMTP é síncrono nesta base; falha provoca rollback do token e aviso operacional sem PII. A recuperação sempre responde 202 para conta conhecida/desconhecida, inclusive falha SMTP, para não revelar cadastro pelo código HTTP. Monitorar `PASSWORD_RECOVERY_EMAIL_UNAVAILABLE`; envio confiável com outbox/retries será ampliado na tarefa 15. Diferença temporal residual deve ser tratada nessa evolução.
 - Rate limit fixo de 15 minutos no PostgreSQL: cadastro 20/IP; login 100/IP e 15/e-mail; recuperação 30/IP e 5/e-mail; redefinição 30/IP. IP encaminhado só é aceito quando a conexão vem do host `APP_AUTH_TRUSTED_PROXY_HOST`; Express sobrescreve o header com IP do socket. Proxies adicionais exigem configuração específica.
 - GET /api/auth/csrf fornece token/headerName antes de qualquer escrita. GET /api/oficina retorna somente id/nome da oficina autenticada, sem edição (tarefa 3).
-- Produção exige perfil prod, HTTPS e SMTP autenticado/TLS; Compose é apenas desenvolvimento. Dependências Angular 19 têm alertas pendentes de atualização antes de publicação.
+- Produção exige perfil prod, HTTPS e SMTP autenticado/TLS; Compose é apenas desenvolvimento. Angular 20.3 corrigiu os alertas npm de produção identificados na série 19; ferramentas de desenvolvimento têm risco residual documentado na tarefa 20 e não devem ser expostas publicamente.
 
 ## 2. Arquitetura e decisões
 
@@ -287,6 +287,8 @@ URL, separados do rascunho; alternar visualização não aplica campos em ediç�
 Limites iniciais configuráveis: 10 MiB por foto, 40 megapixels decodificados, 20 arquivos por seleção; upload individual com concorrência máxima 3. JPEG, PNG e WebP aceitos pelo servidor. HEIC/HEIF não garantidos no MVP: explicar formato incompatível e oferecer captura em formato compatível/seleção de JPEG. Testar essa alternativa em iPhone; não prometer suporte irrestrito.
 
 Normalizar orientação, remover EXIF, produzir miniatura de até 480 px; preservar versão normalizada adequada à visualização, não dados sensíveis de câmera. Chaves aleatórias, fora da pasta pública. Estados PENDENTE, PRONTA, FALHOU e REMOVIDA; publicar somente PRONTA. Cliente gera identificador de upload por arquivo para reenvio seguro. Limpeza periódica de uploads órfãos após 24 horas.
+
+Tarefa 20: imagens novas são reencodificadas sem metadados, orientadas e limitadas a 2048px; WebP é decodificado com TwelveMonkeys e preservado como PNG (primeiro quadro). Miniaturas JPEG até 480px. Arquivos legados são normalizados no download autorizado, com Content-Type correspondente, sem sobrescrever os originais em disco. O limite de três envios é compartilhado entre lotes e reenvios na página.
 
 S3 privado com acesso do backend; download transmitido após autorização a cada requisição, Cache-Control:no-store. Não expor URLs pré-assinadas persistentes: revogar a OS deve bloquear novas leituras imediatamente. Arquivo já baixado pelo cliente não pode ser remotamente apagado. Desenvolvimento usa diretório configurado fora do webroot, volume persistente a adicionar na tarefa 8.
 

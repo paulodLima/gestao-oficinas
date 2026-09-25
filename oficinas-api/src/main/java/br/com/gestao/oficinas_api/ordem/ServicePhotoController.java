@@ -23,7 +23,14 @@ public class ServicePhotoController {
         catch(RuntimeException e) { storage.delete(stored.key()); storage.delete(stored.thumbnailKey()); throw e; }
         return ResponseEntity.status(HttpStatus.CREATED).body(photos.byUpload(owner.oficinaId(),orderId,uploadId).orElseThrow());
     }
-    @GetMapping("/{photoId}/arquivo") public ResponseEntity<ByteArrayResource> file(Authentication auth,@PathVariable UUID orderId,@PathVariable UUID photoId,@RequestParam(defaultValue="false") boolean miniatura) { Identidade owner=identity(auth); orders.order(owner,orderId); var found=photos.find(owner.oficinaId(),orderId,photoId); String key=miniatura && found.thumbnailKey()!=null?found.thumbnailKey():found.key(); String type=miniatura&&found.thumbnailKey()!=null?MediaType.IMAGE_JPEG_VALUE:found.photo().tipoConteudo(); return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.parseMediaType(type)).body(new ByteArrayResource(storage.read(key))); }
+    @GetMapping("/{photoId}/arquivo") public ResponseEntity<ByteArrayResource> file(Authentication auth,@PathVariable UUID orderId,@PathVariable UUID photoId,@RequestParam(defaultValue="false") boolean miniatura) {
+        Identidade owner=identity(auth); orders.order(owner,orderId);
+        var found=photos.find(owner.oficinaId(),orderId,photoId);
+        String key=miniatura && found.thumbnailKey()!=null?found.thumbnailKey():found.key();
+        var display=storage.readDisplay(key);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.parseMediaType(display.contentType()))
+            .body(new ByteArrayResource(display.bytes()));
+    }
     @DeleteMapping("/{photoId}") @ResponseStatus(HttpStatus.NO_CONTENT) @Transactional public void remove(Authentication auth,@PathVariable UUID orderId,@PathVariable UUID photoId) { Identidade owner=identity(auth); orders.lockActive(owner,orderId); var found=photos.find(owner.oficinaId(),orderId,photoId); photos.remove(owner.oficinaId(),owner.id(),orderId,photoId); storage.delete(found.key()); storage.delete(found.thumbnailKey()); }
     private static String blank(String value) { return value==null||value.isBlank()?null:value.trim(); }
     private Identidade identity(Authentication auth) { if(auth==null || !(auth.getDetails() instanceof Identidade owner)) throw new ApiException(401,"NAO_AUTENTICADO","Entre novamente."); return owner; }

@@ -14,7 +14,7 @@ test('configuração, logo, perfil público e revogação', async ({ page, brows
   await page.getByLabel('E-mail', { exact: true }).fill(email);
   await page.getByLabel('Senha', { exact: true }).fill('Oficina-segura-123');
   await page.getByRole('button', { name: 'Entrar na oficina' }).click();
-  await page.getByRole('link', { name: 'Configurar dados e logo da oficina' }).click();
+  await page.getByRole('link', { name: 'Perfil', exact: true }).click();
   await expect(page.getByLabel('Nome da oficina *', { exact: true })).toHaveValue('Oficina inicial');
   await expect(page.getByLabel('Oficina sem logo')).toBeVisible();
   await page.getByLabel('Nome da oficina *', { exact: true }).fill('Oficina Horizonte');

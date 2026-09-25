@@ -13,7 +13,7 @@ test('cadastro, busca e troca de responsável preservada', async ({ page }, info
   await page.getByLabel('E-mail', { exact: true }).fill(email);
   await page.getByLabel('Senha', { exact: true }).fill('Oficina-segura-123');
   await page.getByRole('button', { name: 'Entrar na oficina' }).click();
-  await page.getByRole('link', { name: 'Cadastrar clientes e veículos' }).click();
+  await page.getByRole('link', { name: 'Clientes', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Clientes em ordem/ })).toBeVisible();
 
   await page.getByLabel('Nome completo *').fill('Ana Souza');
@@ -30,7 +30,7 @@ test('cadastro, busca e troca de responsável preservada', async ({ page }, info
   await page.getByRole('button', { name: 'Cadastrar cliente' }).click();
   await expect(page.getByRole('status')).toContainText('Cliente cadastrado');
 
-  await page.getByRole('tab', { name: 'Veículos' }).click();
+  await page.getByRole('link', { name: 'Veículos', exact: true }).click();
   await page.getByLabel('Placa antiga ou Mercosul *').fill('bra-1e23');
   await page.getByLabel('Marca *').fill('Volkswagen');
   await page.getByLabel('Modelo *').fill('T-Cross');

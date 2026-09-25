@@ -1,8 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpErrorResponse } from '@angular/common/http';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { ReactiveFormsModule } from '@angular/forms';
+import { HttpErrorResponse, HttpEvent, HttpResponse } from '@angular/common/http';
+import { of, Subject, throwError } from 'rxjs';
 import { provideRouter } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
-import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderService } from './service-order.service';
+import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderService, ServicePhoto } from './service-order.service';
 import { ServiceOrderPageComponent } from './service-order-page.component';
 
 describe('Ordens de serviço', () => {
@@ -30,7 +33,7 @@ describe('Ordens de serviço', () => {
   beforeEach(() => {
     service = jasmine.createSpyObj<ServiceOrderService>('ServiceOrderService',
       ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish', 'forecasts', 'updateForecast',
-        'photos', 'inspection', 'saveInspection', 'confirmInspection', 'correctInspection']);
+        'photos', 'uploadPhoto', 'inspection', 'saveInspection', 'confirmInspection', 'correctInspection']);
     registrations = jasmine.createSpyObj<CustomerVehicleService>('CustomerVehicleService', ['customers', 'vehicles', 'customer', 'vehicle']);
     registrations.customer.and.resolveTo(customer);
     registrations.vehicle.and.resolveTo(vehicle);
@@ -44,6 +47,113 @@ describe('Ordens de serviço', () => {
     registrations.vehicles.and.resolveTo({ items: [vehicle], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     TestBed.configureTestingModule({ imports: [ServiceOrderPageComponent], providers: [provideRouter([]),
       { provide: ServiceOrderService, useValue: service }, { provide: CustomerVehicleService, useValue: registrations }] });
+  });
+
+  function selectFile(component: ServiceOrderPageComponent, files: File[]) {
+    component.selectPhotos({ target: { files, value: 'selected' } } as unknown as Event);
+    return new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  it('repete apenas a foto com falha usando a mesma chave e a publicação original', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.publishPhotos.setValue(true);
+    service.uploadPhoto.and.resolveTo(throwError(() => new HttpErrorResponse({ status: 0 })));
+    await selectFile(component, [new File(['image'], 'foto.jpg', { type: 'image/jpeg' })]);
+    const entry = component.uploads()[0];
+    expect(entry.error).toContain('Falha');
+    component.publishPhotos.setValue(false);
+    service.uploadPhoto.and.resolveTo(of(new HttpResponse<ServicePhoto>({ status: 200 })));
+    await component.retryPhoto(entry.id);
+    expect(service.uploadPhoto.calls.allArgs().map(args => args[3])).toEqual([entry.id, entry.id]);
+    expect(service.uploadPhoto.calls.mostRecent().args[4]).toBeTrue();
+    expect(component.uploads()[0].file).toBeNull();
+    await component.retryPhoto(entry.id);
+    expect(service.uploadPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it('distingue nomes iguais e não replica o upload que terminou', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load();
+    service.uploadPhoto.and.returnValues(Promise.resolve(of(new HttpResponse<ServicePhoto>({ status: 201 }))),
+      Promise.resolve(throwError(() => new Error('offline'))));
+    await selectFile(component, [new File(['1'], 'foto.jpg', { type: 'image/jpeg' }), new File(['2'], 'foto.jpg', { type: 'image/jpeg' })]);
+    expect(component.uploads()[0].id).not.toBe(component.uploads()[1].id);
+    expect(component.uploads()[0].progress).toBe(100);
+    expect(component.uploads()[1].error).toBeTruthy();
+    expect(component.uploads()[0].published).toBeFalse();
+  });
+
+  it('falha ao obter CSRF também permite repetir e bloqueia clique duplicado', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); service.uploadPhoto.and.rejectWith(new Error('csrf offline'));
+    await selectFile(component, [new File(['1'], 'foto.jpg', { type: 'image/jpeg' })]);
+    const entry = component.uploads()[0]; expect(entry.pending).toBeFalse();
+    const response = new Subject<HttpEvent<ServicePhoto>>(); service.uploadPhoto.and.resolveTo(response);
+    const retry = component.retryPhoto(entry.id);
+    await component.retryPhoto(entry.id); await Promise.resolve();
+    expect(service.uploadPhoto).toHaveBeenCalledTimes(2);
+    response.next(new HttpResponse({ status: 201 })); response.complete(); await retry;
+  });
+
+  it('upload atrasado não substitui fotos de outra OS', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); const response = new Subject<HttpEvent<ServicePhoto>>(); service.uploadPhoto.and.resolveTo(response);
+    await selectFile(component, [new File(['1'], 'foto.jpg', { type: 'image/jpeg' })]);
+    component.selected.set({ ...order, id: 'o2' });
+    response.next(new HttpResponse({ status: 201 })); response.complete();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(component.selectedUploads()).toEqual([]);
+    expect(component.photos()).toEqual([]);
+  });
+
+  it('compartilha três vagas entre reenvios e novas seleções', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load();
+    service.uploadPhoto.and.resolveTo(throwError(() => new Error('offline')));
+    await selectFile(component, Array.from({ length: 4 }, (_, i) => new File(['1'], `foto-${i}.jpg`, { type: 'image/jpeg' })));
+    const responses: Subject<HttpEvent<ServicePhoto>>[] = [];
+    service.uploadPhoto.calls.reset();
+    service.uploadPhoto.and.callFake(async () => {
+      const response = new Subject<HttpEvent<ServicePhoto>>(); responses.push(response); return response;
+    });
+    const retries = component.uploads().map(entry => component.retryPhoto(entry.id));
+    await selectFile(component, [new File(['new'], 'nova.jpg', { type: 'image/jpeg' })]);
+    expect(responses.length).toBe(3);
+    responses[0].next(new HttpResponse({ status: 201 })); responses[0].complete();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(responses.length).toBe(4);
+    responses[1].error(new Error('offline again'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(responses.length).toBe(5);
+    for (const response of responses.slice(2)) { response.next(new HttpResponse({ status: 201 })); response.complete(); }
+    await Promise.all(retries);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(component.uploads().filter(entry => entry.pending).length).toBe(0);
+    expect(component.uploads().filter(entry => entry.error).length).toBe(1);
+  });
+
+  it('permite recarregar fotos de OS encerrada sem habilitar mutações', async () => {
+    TestBed.overrideComponent(ServiceOrderPageComponent, { set: { imports: [ReactiveFormsModule], schemas: [NO_ERRORS_SCHEMA] } });
+    const closed = { ...order, status: 'ENTREGUE' as const };
+    service.orders.and.resolveTo({ items: [closed], page: 0, size: 100, totalElements: 1, totalPages: 1 });
+    service.photos.and.rejectWith(new Error('offline'));
+    const fixture = TestBed.createComponent(ServiceOrderPageComponent);
+    fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    const retry = Array.from(element.querySelectorAll('button')).find(button => button.textContent?.includes('Recarregar fotos'))!;
+    expect(retry).toBeTruthy(); expect(retry.matches(':disabled')).toBeFalse();
+    expect(element.querySelector('#order-gallery')!.matches(':disabled')).toBeTrue();
+    service.photos.and.resolveTo([]); retry.click();
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(service.photos).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.photosError()).toBe('');
+  });
+
+  it('câmera cancelada e formato HEIC não enviam arquivos', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); await selectFile(component, []);
+    await selectFile(component, [new File(['1'], 'foto.heic', { type: 'image/heic' })]);
+    expect(service.uploadPhoto).not.toHaveBeenCalled(); expect(component.error()).toContain('JPEG');
   });
 
   it('carrega diretório, cadastros e detalhe inicial', async () => {
@@ -219,6 +329,16 @@ describe('Ordens de serviço', () => {
     expect(component.selected()?.id).toBe('outra');
     expect(component.orders()[0].status).toBe('ENTREGUE');
     expect(component.deadlineLabel(component.orders()[0])).toBe('Encerrada · histórico interno');
+  });
+
+  it('encerramento preserva fotos do histórico já carregado', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load();
+    const photo: ServicePhoto = { id: 'p1', etapa: 'RECEBIDO', legenda: null, publicada: false,
+      tipoConteudo: 'image/jpeg', tamanhoBytes: 10, miniaturaDisponivel: true, createdAt: order.createdAt };
+    component.photos.set([photo]);
+    await component.orderClosed({ ...order, status: 'ENTREGUE' });
+    expect(component.photos()).toEqual([photo]);
   });
 
   it('preserva o formulário no navegador quando a confirmação falha', async () => {
