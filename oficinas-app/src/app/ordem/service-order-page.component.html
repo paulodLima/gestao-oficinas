@@ -40,6 +40,18 @@
             <div><dt>Previsão atual</dt><dd>{{ formatDate(order.previsaoEm) }}</dd></div></dl>
           <p class="badge deadline-state" [class.late]="order.atrasada" [class.ready]="order.aguardandoRetirada">{{ deadlineLabel(order) }}</p>
           <h3>Relato de entrada</h3><p class="report">{{ order.relatoInicial }}</p>
+          <section class="workflow" aria-labelledby="customer-access-title">
+            <p class="step">ACESSO DO CLIENTE</p><h3 id="customer-access-title">Link exclusivo de acompanhamento</h3>
+            <p class="hint">Acesso somente para leitura desta OS, válido por sete dias. Criar um novo link revoga o anterior.</p>
+            @if (customerAccessUrl()) {
+              <label for="customer-access-url">Link para enviar ao cliente</label>
+              <input id="customer-access-url" class="access-url" [value]="customerAccessUrl()" readonly>
+              <p class="hint">Expira em {{ formatDate(customerAccessExpires()) }}.</p>
+              <button type="button" class="secondary full" [disabled]="busy()" (click)="revokeCustomerAccess()">Revogar acesso</button>
+            } @else {
+              <button type="button" class="secondary full" [disabled]="busy()" (click)="createCustomerAccess()">Criar link de acompanhamento</button>
+            }
+          </section>
           <section class="workflow" aria-labelledby="workflow-title">
             <div class="subheading"><div><p class="step">03 / FLUXO</p><h3 id="workflow-title">Atualizar etapa</h3></div>
               <span class="version">versão {{ order.versao }}</span></div>

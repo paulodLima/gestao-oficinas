@@ -1,31 +1,398 @@
 package br.com.gestao.oficinas_api.portal;
 
-import br.com.gestao.oficinas_api.identidade.*;
-import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail; import br.com.gestao.oficinas_api.ordem.PhotoStorage;
-import java.nio.charset.StandardCharsets; import java.security.*; import java.sql.Timestamp; import java.time.*; import java.util.*; import javax.crypto.Mac; import javax.crypto.spec.SecretKeySpec;
+import br.com.gestao.oficinas_api.identidade.ApiException;
+import br.com.gestao.oficinas_api.identidade.AuthProperties;
+import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail;
+import br.com.gestao.oficinas_api.ordem.PhotoStorage;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.http.ResponseEntity; import org.springframework.jdbc.core.JdbcTemplate; import org.springframework.web.bind.annotation.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-@RestController @RequestMapping("/api/portal")
+@RestController
+@RequestMapping("/api/portal")
 public class PortalAccessController {
- private final JdbcTemplate jdbc; private final TransactionalEmail email; private final AuthProperties auth; private final Clock clock; private final PhotoStorage storage; private final SecureRandom random=new SecureRandom();
- public PortalAccessController(JdbcTemplate jdbc,TransactionalEmail email,AuthProperties auth,Clock clock,PhotoStorage storage){this.jdbc=jdbc;this.email=email;this.auth=auth;this.clock=clock;this.storage=storage;}
- @PostMapping("/acesso/codigo") public ResponseEntity<Map<String,Object>> code(@RequestBody Request body){
-  UUID publicId=UUID.randomUUID(); if(body.oficinaSlug()==null||body.placa()==null)return ResponseEntity.accepted().body(Map.of("desafioId",publicId)); String plate=body.placa().replaceAll("[^A-Za-z0-9]","").toUpperCase();
-  var rows=jdbc.query("SELECT c.id,c.email FROM oficina o JOIN veiculo v ON v.oficina_id=o.id JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id AND l.veiculo_id=v.id AND l.fim_em IS NULL JOIN cliente c ON c.oficina_id=l.oficina_id AND c.id=l.cliente_id WHERE o.slug=? AND v.placa=? AND c.email_verificado_em IS NOT NULL AND c.ativo=true",(r,n)->new Target(r.getObject(1,UUID.class),r.getString(2)),body.oficinaSlug(),plate);
-  if(rows.isEmpty())return ResponseEntity.accepted().body(Map.of("desafioId",publicId)); try { UUID id=publicId;String value="%06d".formatted(random.nextInt(1_000_000));jdbc.update("INSERT INTO portal_desafio(id,oficina_id,cliente_id,placa,codigo_hash,expira_em) SELECT ?,o.id,?,?,?,? FROM oficina o WHERE o.slug=?",id,rows.getFirst().id(),plate,hash(id,value),Timestamp.from(clock.instant().plus(Duration.ofMinutes(10))),body.oficinaSlug());email.send(rows.getFirst().email(),"Código de acesso · Gestão Oficinas","Seu código é: "+value+"\n\nVálido por 10 minutos.");return ResponseEntity.accepted().body(Map.of("desafioId",id)); }catch(Exception ignored){} return ResponseEntity.accepted().body(Map.of("desafioId",publicId)); }
- @PostMapping("/acesso/validacao") @Transactional public ResponseEntity<Void> validate(@RequestBody Validate body,HttpSession session){ if(body.desafioId()==null||body.codigo()==null||!body.codigo().matches("[0-9]{6}"))throw invalid(); var rows=jdbc.query("SELECT oficina_id,cliente_id,codigo_hash,expira_em,tentativas,usado_em FROM portal_desafio WHERE id=? FOR UPDATE",(r,n)->new Challenge(r.getObject(1,UUID.class),r.getObject(2,UUID.class),r.getString(3),r.getTimestamp(4).toInstant(),r.getInt(5),r.getTimestamp(6)),body.desafioId());if(rows.isEmpty())throw invalid();var c=rows.getFirst();boolean ok=c.used()==null&&c.attempts()<5&&clock.instant().isBefore(c.expires())&&MessageDigest.isEqual(c.hash().getBytes(StandardCharsets.US_ASCII),hash(body.desafioId(),body.codigo()).getBytes(StandardCharsets.US_ASCII));if(!ok){jdbc.update("UPDATE portal_desafio SET tentativas=tentativas+1 WHERE id=? AND tentativas<5",body.desafioId());throw invalid();}jdbc.update("UPDATE portal_desafio SET usado_em=now() WHERE id=?",body.desafioId());session.setAttribute("PORTAL_CLIENTE",new Grant(c.office(),c.customer(),null,clock.instant()));return ResponseEntity.noContent().build(); }
- @PostMapping("/acesso/link") @Transactional public ResponseEntity<Void> link(@RequestBody Link body,HttpSession session){if(body.token()==null||body.token().length()<40)throw new ApiException(400,"LINK_INVALIDO","Link inválido ou expirado.");String digest=sha(body.token());var rows=jdbc.query("SELECT oficina_id,ordem_servico_id,expira_em,revogado_em FROM portal_link_os WHERE token_hash=? FOR UPDATE",(r,n)->new LinkGrant(r.getObject(1,UUID.class),r.getObject(2,UUID.class),r.getTimestamp(3).toInstant(),r.getTimestamp(4)),digest);if(rows.isEmpty()||rows.getFirst().revoked()!=null||clock.instant().isAfter(rows.getFirst().expires()))throw new ApiException(400,"LINK_INVALIDO","Link inválido ou expirado.");var g=rows.getFirst();jdbc.update("UPDATE portal_link_os SET usado_em=now() WHERE token_hash=?",digest);session.setAttribute("PORTAL_CLIENTE",new Grant(g.office(),null,g.order(),clock.instant()));return ResponseEntity.noContent().build();}
- @GetMapping("/veiculos") public List<Vehicle> vehicles(HttpSession session){Grant g=grant(session);if(g.order()!=null)return List.of();return jdbc.query("SELECT v.id,v.placa,concat_ws(' ',v.marca,v.modelo) FROM veiculo v JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id AND l.veiculo_id=v.id AND l.fim_em IS NULL WHERE v.oficina_id=? AND l.cliente_id=?",(r,n)->new Vehicle(r.getObject(1,UUID.class),r.getString(2),r.getString(3)),g.office(),g.customer());}
- @GetMapping("/servico-atual") public Map<String,Object> current(HttpSession session,@RequestParam(required=false) UUID veiculoId){Grant g=grant(session);var rows=jdbc.query("SELECT os.id,os.numero,os.status,os.previsao_em,v.placa,concat_ws(' ',v.marca,v.modelo) veiculo,o.nome oficina FROM ordem_servico os JOIN veiculo v ON v.id=os.veiculo_id AND v.oficina_id=os.oficina_id JOIN oficina o ON o.id=os.oficina_id LEFT JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id AND l.veiculo_id=v.id AND l.fim_em IS NULL WHERE os.oficina_id=? AND os.encerrada_em IS NULL AND (?::uuid IS NULL OR os.veiculo_id=?) AND (?::uuid IS NULL OR l.cliente_id=?) AND (?::uuid IS NULL OR os.id=?) ORDER BY os.entrada_em DESC LIMIT 1",(r,n)->Map.<String,Object>of("id",r.getObject("id",UUID.class),"numero",r.getLong("numero"),"status",r.getString("status"),"previsaoEm",r.getTimestamp("previsao_em")==null?"":r.getTimestamp("previsao_em").toInstant().toString(),"placa",r.getString("placa"),"veiculo",r.getString("veiculo"),"oficina",r.getString("oficina")),g.office(),veiculoId,veiculoId,g.customer(),g.customer(),g.order(),g.order());return Map.of("servico",rows.isEmpty()?null:rows.getFirst());}
- @GetMapping("/ordens-servico/{id}/atualizacoes") public List<Map<String,Object>> updates(HttpSession session,@PathVariable UUID id){Grant g=authorize(session,id);return jdbc.query("SELECT e.id,e.tipo,e.status_anterior,e.status_novo,e.texto_publico,e.created_at,p.nome FROM ordem_servico_evento e JOIN proprietario p ON p.id=e.autor_id WHERE e.oficina_id=? AND e.ordem_servico_id=? AND e.publicada=true AND e.texto_publico IS NOT NULL ORDER BY e.created_at DESC",(r,n)->Map.<String,Object>of("id",r.getObject(1,UUID.class),"tipo",r.getString(2),"statusAnterior",Optional.ofNullable(r.getString(3)).orElse(""),"statusNovo",Optional.ofNullable(r.getString(4)).orElse(""),"texto",r.getString(5),"createdAt",r.getTimestamp(6).toInstant().toString(),"autor",r.getString(7)),g.office(),id);}
- @GetMapping("/ordens-servico/{id}/fotos") public List<Map<String,Object>> photos(HttpSession session,@PathVariable UUID id){Grant g=authorize(session,id);return jdbc.query("SELECT id,etapa,legenda,created_at FROM ordem_servico_foto WHERE oficina_id=? AND ordem_servico_id=? AND estado='PRONTA' AND publicada=true ORDER BY created_at ASC",(r,n)->Map.<String,Object>of("id",r.getObject(1,UUID.class),"etapa",r.getString(2),"legenda",Optional.ofNullable(r.getString(3)).orElse(""),"createdAt",r.getTimestamp(4).toInstant().toString()),g.office(),id);}
- @GetMapping("/ordens-servico/{orderId}/fotos/{photoId}/conteudo") public ResponseEntity<byte[]> photo(HttpSession session,@PathVariable UUID orderId,@PathVariable UUID photoId){Grant g=authorize(session,orderId);var rows=jdbc.query("SELECT chave_miniatura,chave_arquivo,tipo_conteudo FROM ordem_servico_foto WHERE oficina_id=? AND ordem_servico_id=? AND id=? AND publicada=true AND estado='PRONTA'",(r,n)->new PublicPhoto(r.getString(1),r.getString(2),r.getString(3)),g.office(),orderId,photoId);if(rows.isEmpty())throw new ApiException(404,"FOTO_NAO_ENCONTRADA","Foto não encontrada.");var p=rows.getFirst();String key=p.thumb()==null?p.key():p.thumb();return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).contentType(org.springframework.http.MediaType.parseMediaType(p.thumb()==null?p.type():"image/jpeg")).body(storage.read(key));}
- @PostMapping("/logout") public ResponseEntity<Void> logout(HttpSession s){s.invalidate();return ResponseEntity.noContent().build();}
- private Grant grant(HttpSession s){Object g=s.getAttribute("PORTAL_CLIENTE");if(!(g instanceof Grant value)||clock.instant().isAfter(value.at().plus(Duration.ofHours(24))))throw new ApiException(401,"ACESSO_EXPIRADO","Acesse novamente.");return value;}
- private Grant authorize(HttpSession session,UUID order){Grant g=grant(session);if(g.order()!=null&&g.order().equals(order))return g;Integer ok=jdbc.queryForObject("SELECT count(*) FROM ordem_servico os JOIN vinculo_cliente_veiculo l ON l.oficina_id=os.oficina_id AND l.veiculo_id=os.veiculo_id AND l.fim_em IS NULL WHERE os.oficina_id=? AND os.id=? AND l.cliente_id=? AND os.encerrada_em IS NULL",Integer.class,g.office(),order,g.customer());if(ok==null||ok==0)throw new ApiException(404,"SERVICO_NAO_ENCONTRADO","Serviço não encontrado.");return g;}
- private String hash(UUID id,String code){try{Mac m=Mac.getInstance("HmacSHA256");m.init(new SecretKeySpec(auth.codeSecret().getBytes(StandardCharsets.UTF_8),"HmacSHA256"));return HexFormat.of().formatHex(m.doFinal((id+":"+code).getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
- private String sha(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
- private ApiException invalid(){return new ApiException(400,"CODIGO_INVALIDO","Código inválido ou expirado.");} public record Request(String oficinaSlug,String placa){} public record Validate(UUID desafioId,String codigo){} public record Link(String token){} public record Vehicle(UUID id,String placa,String veiculo){} private record Target(UUID id,String email){} private record Challenge(UUID office,UUID customer,String hash,Instant expires,int attempts,Timestamp used){} private record LinkGrant(UUID office,UUID order,Instant expires,Timestamp revoked){} private record PublicPhoto(String thumb,String key,String type){} private record Grant(UUID office,UUID customer,UUID order,Instant at) implements java.io.Serializable{}
+    private static final Duration CHALLENGE_DURATION = Duration.ofMinutes(10);
+    private static final Duration SESSION_DURATION = Duration.ofHours(24);
+    private static final int MAX_ATTEMPTS = 5;
+
+    private final JdbcTemplate jdbc;
+    private final TransactionalEmail email;
+    private final AuthProperties auth;
+    private final Clock clock;
+    private final PhotoStorage storage;
+    private final PortalAccessPolicy policy;
+    private final SecureRandom random = new SecureRandom();
+
+    public PortalAccessController(JdbcTemplate jdbc, TransactionalEmail email, AuthProperties auth,
+                                  Clock clock, PhotoStorage storage, PortalAccessPolicy policy) {
+        this.jdbc = jdbc;
+        this.email = email;
+        this.auth = auth;
+        this.clock = clock;
+        this.storage = storage;
+        this.policy = policy;
+    }
+
+    @PostMapping("/acesso/codigo")
+    public ResponseEntity<Map<String, Object>> requestCode(@RequestBody Request body) {
+        UUID publicId = UUID.randomUUID();
+        if (body.oficinaSlug() == null || body.placa() == null) {
+            return accepted(publicId);
+        }
+        String plate = normalizePlate(body.placa());
+        var targets = jdbc.query("""
+            SELECT c.id, c.email
+              FROM oficina o
+              JOIN veiculo v ON v.oficina_id=o.id
+              JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id
+                   AND l.veiculo_id=v.id AND l.fim_em IS NULL
+              JOIN cliente c ON c.oficina_id=l.oficina_id AND c.id=l.cliente_id
+             WHERE o.slug=? AND v.placa=? AND c.email_verificado_em IS NOT NULL AND c.ativo=true
+            """, (result, row) -> new Target(result.getObject(1, UUID.class), result.getString(2)),
+            body.oficinaSlug(), plate);
+        if (targets.isEmpty()) {
+            return accepted(publicId);
+        }
+
+        try {
+            String value = "%06d".formatted(random.nextInt(1_000_000));
+            jdbc.update("""
+                INSERT INTO portal_desafio(id,oficina_id,cliente_id,placa,codigo_hash,expira_em)
+                SELECT ?,o.id,?,?,?,? FROM oficina o WHERE o.slug=?
+                """, publicId, targets.getFirst().id(), plate, hash(publicId, value),
+                Timestamp.from(clock.instant().plus(CHALLENGE_DURATION)), body.oficinaSlug());
+            email.send(targets.getFirst().email(), "Código de acesso · Gestão Oficinas",
+                "Seu código é: " + value + "\n\nVálido por 10 minutos.");
+        } catch (Exception ignored) {
+            // A resposta é deliberadamente idêntica para não revelar cadastros ou falhas de entrega.
+        }
+        return accepted(publicId);
+    }
+
+    @PostMapping("/acesso/validacao")
+    @Transactional
+    public ResponseEntity<Void> validateCode(@RequestBody Validate body, HttpSession session) {
+        if (body.desafioId() == null || body.codigo() == null || !body.codigo().matches("[0-9]{6}")) {
+            throw invalidCode();
+        }
+        var challenges = jdbc.query("""
+            SELECT oficina_id,cliente_id,placa,codigo_hash,expira_em,tentativas,usado_em
+              FROM portal_desafio WHERE id=? FOR UPDATE
+            """, (result, row) -> new Challenge(
+                result.getObject(1, UUID.class), result.getObject(2, UUID.class), result.getString(3),
+                result.getString(4), result.getTimestamp(5).toInstant(), result.getInt(6),
+                instant(result.getTimestamp(7))), body.desafioId());
+        if (challenges.isEmpty()) {
+            throw invalidCode();
+        }
+
+        Challenge challenge = challenges.getFirst();
+        boolean valid = policy.validChallenge(challenge.expires(), challenge.attempts(), challenge.used(),
+            challenge.hash(), hash(body.desafioId(), body.codigo()), clock.instant());
+        if (valid) {
+            valid = hasCurrentVehicleLink(challenge.office(), challenge.customer(), challenge.plate());
+        }
+        if (!valid) {
+            jdbc.update("UPDATE portal_desafio SET tentativas=tentativas+1 WHERE id=? AND tentativas<?",
+                body.desafioId(), MAX_ATTEMPTS);
+            throw invalidCode();
+        }
+
+        jdbc.update("UPDATE portal_desafio SET usado_em=? WHERE id=?", Timestamp.from(clock.instant()), body.desafioId());
+        session.setAttribute("PORTAL_CLIENTE",
+            new Grant(challenge.office(), challenge.customer(), null, null, clock.instant()));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/acesso/link")
+    @Transactional
+    public ResponseEntity<Void> consumeLink(@RequestBody Link body, HttpSession session) {
+        if (body.token() == null || body.token().length() < 40) {
+            throw invalidLink();
+        }
+        String digest = sha(body.token());
+        var links = jdbc.query("""
+            SELECT id,oficina_id,ordem_servico_id,expira_em,revogado_em
+              FROM portal_link_os WHERE token_hash=? FOR UPDATE
+            """, (result, row) -> new LinkGrant(
+                result.getObject(1, UUID.class), result.getObject(2, UUID.class),
+                result.getObject(3, UUID.class), result.getTimestamp(4).toInstant(),
+                instant(result.getTimestamp(5))), digest);
+        if (links.isEmpty()) {
+            throw invalidLink();
+        }
+        LinkGrant link = links.getFirst();
+        if (!policy.validLink(link.expires(), link.revoked(), clock.instant()) || !activeOrder(link)) {
+            throw invalidLink();
+        }
+        jdbc.update("UPDATE portal_link_os SET usado_em=? WHERE id=?", Timestamp.from(clock.instant()), link.id());
+        session.setAttribute("PORTAL_CLIENTE",
+            new Grant(link.office(), null, link.order(), link.id(), clock.instant()));
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/veiculos")
+    public List<Vehicle> vehicles(HttpSession session) {
+        Grant grant = grant(session);
+        if (grant.order() != null) {
+            return List.of();
+        }
+        return jdbc.query("""
+            SELECT v.id,v.placa,concat_ws(' ',v.marca,v.modelo)
+              FROM veiculo v
+              JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id
+                   AND l.veiculo_id=v.id AND l.fim_em IS NULL
+             WHERE v.oficina_id=? AND l.cliente_id=? ORDER BY v.placa
+            """, (result, row) -> new Vehicle(result.getObject(1, UUID.class), result.getString(2),
+                result.getString(3)), grant.office(), grant.customer());
+    }
+
+    @GetMapping("/servico-atual")
+    public Map<String, Object> current(HttpSession session, @RequestParam(required = false) UUID veiculoId) {
+        Grant grant = grant(session);
+        var rows = jdbc.query("""
+            SELECT os.id,os.numero,os.status,os.previsao_em,v.placa,
+                   concat_ws(' ',v.marca,v.modelo) veiculo,o.nome oficina
+              FROM ordem_servico os
+              JOIN veiculo v ON v.id=os.veiculo_id AND v.oficina_id=os.oficina_id
+              JOIN oficina o ON o.id=os.oficina_id
+              LEFT JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id
+                   AND l.veiculo_id=v.id AND l.fim_em IS NULL
+             WHERE os.oficina_id=? AND os.encerrada_em IS NULL
+               AND (?::uuid IS NULL OR os.veiculo_id=?)
+               AND (?::uuid IS NULL OR l.cliente_id=?)
+               AND (?::uuid IS NULL OR os.id=?)
+             ORDER BY os.entrada_em DESC LIMIT 1
+            """, (result, row) -> Map.<String, Object>of(
+                "id", result.getObject("id", UUID.class), "numero", result.getLong("numero"),
+                "status", result.getString("status"),
+                "previsaoEm", result.getTimestamp("previsao_em") == null ? ""
+                    : result.getTimestamp("previsao_em").toInstant().toString(),
+                "placa", result.getString("placa"), "veiculo", result.getString("veiculo"),
+                "oficina", result.getString("oficina")),
+            grant.office(), veiculoId, veiculoId, grant.customer(), grant.customer(), grant.order(), grant.order());
+        return Collections.singletonMap("servico", rows.isEmpty() ? null : rows.getFirst());
+    }
+
+    @GetMapping("/ordens-servico/{id}/atualizacoes")
+    public List<Map<String, Object>> updates(HttpSession session, @PathVariable UUID id) {
+        Grant grant = authorize(session, id);
+        return jdbc.query("""
+            SELECT e.id,e.tipo,e.status_anterior,e.status_novo,e.texto_publico,e.created_at,p.nome
+              FROM ordem_servico_evento e JOIN proprietario p ON p.id=e.autor_id
+             WHERE e.oficina_id=? AND e.ordem_servico_id=? AND e.publicada=true
+               AND e.texto_publico IS NOT NULL ORDER BY e.created_at DESC
+            """, (result, row) -> Map.<String, Object>of(
+                "id", result.getObject(1, UUID.class), "tipo", result.getString(2),
+                "statusAnterior", Optional.ofNullable(result.getString(3)).orElse(""),
+                "statusNovo", Optional.ofNullable(result.getString(4)).orElse(""),
+                "texto", result.getString(5), "createdAt", result.getTimestamp(6).toInstant().toString(),
+                "autor", result.getString(7)), grant.office(), id);
+    }
+
+    @GetMapping("/ordens-servico/{id}/fotos")
+    public List<Map<String, Object>> photos(HttpSession session, @PathVariable UUID id) {
+        Grant grant = authorize(session, id);
+        return jdbc.query("""
+            SELECT id,etapa,legenda,created_at FROM ordem_servico_foto
+             WHERE oficina_id=? AND ordem_servico_id=? AND estado='PRONTA' AND publicada=true
+             ORDER BY created_at ASC
+            """, (result, row) -> Map.<String, Object>of(
+                "id", result.getObject(1, UUID.class), "etapa", result.getString(2),
+                "legenda", Optional.ofNullable(result.getString(3)).orElse(""),
+                "createdAt", result.getTimestamp(4).toInstant().toString()), grant.office(), id);
+    }
+
+    @GetMapping("/ordens-servico/{orderId}/fotos/{photoId}/conteudo")
+    public ResponseEntity<byte[]> photo(HttpSession session, @PathVariable UUID orderId,
+                                        @PathVariable UUID photoId) {
+        Grant grant = authorize(session, orderId);
+        var rows = jdbc.query("""
+            SELECT chave_miniatura,chave_arquivo,tipo_conteudo FROM ordem_servico_foto
+             WHERE oficina_id=? AND ordem_servico_id=? AND id=? AND publicada=true AND estado='PRONTA'
+            """, (result, row) -> new PublicPhoto(result.getString(1), result.getString(2), result.getString(3)),
+            grant.office(), orderId, photoId);
+        if (rows.isEmpty()) {
+            throw new ApiException(404, "FOTO_NAO_ENCONTRADA", "Foto não encontrada.");
+        }
+        PublicPhoto photo = rows.getFirst();
+        String key = photo.thumb() == null ? photo.key() : photo.thumb();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .contentType(MediaType.parseMediaType(photo.thumb() == null ? photo.type() : "image/jpeg"))
+            .body(storage.read(key));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpSession session) {
+        session.invalidate();
+        return ResponseEntity.noContent().build();
+    }
+
+    private Grant grant(HttpSession session) {
+        Object stored = session.getAttribute("PORTAL_CLIENTE");
+        if (!(stored instanceof Grant)) {
+            expire(session);
+        }
+        Grant grant = (Grant) stored;
+        if (policy.expiredSession(grant.createdAt(), clock.instant(), SESSION_DURATION)) {
+            expire(session);
+        }
+        if (grant.linkId() != null && !currentLinkIsValid(grant)) {
+            expire(session);
+        }
+        if (grant.customer() != null && !activeCustomer(grant.office(), grant.customer())) {
+            expire(session);
+        }
+        return grant;
+    }
+
+    private Grant authorize(HttpSession session, UUID order) {
+        Grant grant = grant(session);
+        if (grant.order() != null) {
+            if (grant.order().equals(order)) {
+                return grant;
+            }
+            throw serviceNotFound();
+        }
+        Integer count = jdbc.queryForObject("""
+            SELECT count(*) FROM ordem_servico os
+              JOIN vinculo_cliente_veiculo l ON l.oficina_id=os.oficina_id
+                   AND l.veiculo_id=os.veiculo_id AND l.fim_em IS NULL
+             WHERE os.oficina_id=? AND os.id=? AND l.cliente_id=? AND os.encerrada_em IS NULL
+            """, Integer.class, grant.office(), order, grant.customer());
+        if (count == null || count == 0) {
+            throw serviceNotFound();
+        }
+        return grant;
+    }
+
+    private boolean hasCurrentVehicleLink(UUID office, UUID customer, String plate) {
+        Integer count = jdbc.queryForObject("""
+            SELECT count(*) FROM cliente c
+              JOIN vinculo_cliente_veiculo l ON l.oficina_id=c.oficina_id
+                   AND l.cliente_id=c.id AND l.fim_em IS NULL
+              JOIN veiculo v ON v.oficina_id=l.oficina_id AND v.id=l.veiculo_id
+             WHERE c.oficina_id=? AND c.id=? AND c.ativo=true
+               AND c.email_verificado_em IS NOT NULL AND v.placa=?
+            """, Integer.class, office, customer, plate);
+        return count != null && count > 0;
+    }
+
+    private boolean activeCustomer(UUID office, UUID customer) {
+        Integer count = jdbc.queryForObject("""
+            SELECT count(*) FROM cliente
+             WHERE oficina_id=? AND id=? AND ativo=true AND email_verificado_em IS NOT NULL
+            """, Integer.class, office, customer);
+        return count != null && count > 0;
+    }
+
+    private boolean activeOrder(LinkGrant link) {
+        Integer count = jdbc.queryForObject("""
+            SELECT count(*) FROM ordem_servico
+             WHERE oficina_id=? AND id=? AND encerrada_em IS NULL
+            """, Integer.class, link.office(), link.order());
+        return count != null && count > 0;
+    }
+
+    private boolean currentLinkIsValid(Grant grant) {
+        var links = jdbc.query("""
+            SELECT expira_em,revogado_em FROM portal_link_os
+             WHERE id=? AND oficina_id=? AND ordem_servico_id=?
+            """, (result, row) -> new LinkState(result.getTimestamp(1).toInstant(), instant(result.getTimestamp(2))),
+            grant.linkId(), grant.office(), grant.order());
+        if (links.isEmpty() || !policy.validLink(links.getFirst().expires(), links.getFirst().revoked(), clock.instant())) {
+            return false;
+        }
+        Integer active = jdbc.queryForObject("""
+            SELECT count(*) FROM ordem_servico
+             WHERE oficina_id=? AND id=? AND encerrada_em IS NULL
+            """, Integer.class, grant.office(), grant.order());
+        return active != null && active > 0;
+    }
+
+    private void expire(HttpSession session) {
+        session.invalidate();
+        throw new ApiException(401, "ACESSO_EXPIRADO", "Acesse novamente.");
+    }
+
+    private ResponseEntity<Map<String, Object>> accepted(UUID challengeId) {
+        return ResponseEntity.accepted().body(Map.of("desafioId", challengeId));
+    }
+
+    private String hash(UUID id, String code) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(auth.codeSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return HexFormat.of().formatHex(mac.doFinal((id + ":" + code).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private String sha(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private String normalizePlate(String value) {
+        return value.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+    }
+
+    private Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    private ApiException invalidCode() {
+        return new ApiException(400, "CODIGO_INVALIDO", "Código inválido ou expirado.");
+    }
+
+    private ApiException invalidLink() {
+        return new ApiException(400, "LINK_INVALIDO", "Link inválido ou expirado.");
+    }
+
+    private ApiException serviceNotFound() {
+        return new ApiException(404, "SERVICO_NAO_ENCONTRADO", "Serviço não encontrado.");
+    }
+
+    public record Request(String oficinaSlug, String placa) {}
+    public record Validate(UUID desafioId, String codigo) {}
+    public record Link(String token) {}
+    public record Vehicle(UUID id, String placa, String veiculo) {}
+    private record Target(UUID id, String email) {}
+    private record Challenge(UUID office, UUID customer, String plate, String hash, Instant expires,
+                             int attempts, Instant used) {}
+    private record LinkGrant(UUID id, UUID office, UUID order, Instant expires, Instant revoked) {}
+    private record LinkState(Instant expires, Instant revoked) {}
+    private record PublicPhoto(String thumb, String key, String type) {}
+    private record Grant(UUID office, UUID customer, UUID order, UUID linkId, Instant createdAt)
+        implements java.io.Serializable {}
 }

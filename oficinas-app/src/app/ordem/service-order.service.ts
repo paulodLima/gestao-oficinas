@@ -46,6 +46,7 @@ export interface InspectionChecklist {
   avarias: string; observacoes: string; fotos: Record<string, string>;
 }
 export interface Inspection { id: string; numeroVersao: number; estado: 'RASCUNHO' | 'CONFIRMADA'; checklist: InspectionChecklist; motivoCorrecao: string | null; createdAt: string; updatedAt: string; }
+export interface CustomerAccessLink { token: string; expiraEm: string; }
 
 @Injectable({ providedIn: 'root' })
 export class ServiceOrderService {
@@ -93,6 +94,14 @@ export class ServiceOrderService {
   async correctInspection(id: string, expectedVersion: number, motivo: string, checklist: InspectionChecklist) {
     return firstValueFrom(this.http.post<Inspection>(`/api/ordens-servico/${id}/vistoria/correcoes`,
       { expectedVersion, motivo, checklist }, { headers: await this.headers() }));
+  }
+  async createCustomerAccess(id: string) {
+    return firstValueFrom(this.http.post<CustomerAccessLink>(`/api/ordens-servico/${id}/acesso`, {},
+      { headers: await this.headers() }));
+  }
+  async revokeCustomerAccess(id: string) {
+    return firstValueFrom(this.http.delete<void>(`/api/ordens-servico/${id}/acesso`,
+      { headers: await this.headers() }));
   }
   private async headers() {
     const csrf = await firstValueFrom(this.http.get<{ token: string; headerName: string }>('/api/auth/csrf'));

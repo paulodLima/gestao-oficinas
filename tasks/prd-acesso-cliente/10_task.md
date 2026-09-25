@@ -15,4 +15,14 @@
 - [x] 10.2 Sessão limitada e veículos autorizados.
 - [x] 10.3 Emissão, consumo e revogação de link exclusivo de OS.
 - [x] 10.4 Tela móvel de acesso.
-- [ ] 10.5 Testes de expiração, tentativas, isolamento e privilégios.
+- [x] 10.5 Testes de expiração, tentativas, isolamento e privilégios.
+
+## Evidências de conclusão
+
+- Política de expiração, tentativas, uso único, revogação e duração de sessão coberta por testes unitários.
+- Integração coberta para não enumeração, isolamento por oficina, vínculo vigente e ausência de privilégios de escrita no link.
+- Portal móvel coberto para CSRF, solicitação genérica, validação e seleção de veículos autorizados.
+- `mvn test` (testes unitários): 20 aprovados.
+- `npm test -- --watch=false --browsers=ChromeHeadless`: 32 aprovados.
+- `mvn -DskipTests compile` e `npm run build`: aprovados.
+- A execução local dos testes Testcontainers depende do Docker Desktop; nesta estação o serviço está indisponível, embora a suíte de integração compile corretamente.
