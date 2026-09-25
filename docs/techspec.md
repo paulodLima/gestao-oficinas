@@ -299,7 +299,7 @@ worker `REQUIRES_NEW` com `SKIP LOCKED` e revalidação de contato sob lock. Ree
 manual somente de falha terminal, com cooldown. E-mail informa nome/slug da oficina
 para o fluxo por código, sem notas internas ou concessão de acesso. A deduplicação
 é persistente; SMTP permanece at-least-once na janela entre aceitação e commit.
-Contratos futuros reservados às tarefas 17/18; códigos/recuperação seguem síncronos
+Encerramento (17) e convite de avaliação (18) já alimentam a outbox; códigos/recuperação seguem síncronos
 (o risco temporal residual da recuperação não é resolvido pela outbox comercial).
 Detalhes e evidências: `tasks/prd-notificacoes/techspec.md` e `validacao.md`.
 
@@ -308,6 +308,38 @@ MAIL_HOST/PORT/USERNAME/PASSWORD/FROM, STORAGE_DRIVER/BUCKET/REGION e segredo HM
 Migrações Flyway incrementais e imutáveis, inclusive tabelas Spring Session. Não aplicar scripts de teste em produção. Testes integrados usam PostgreSQL, não substituição por H2 para índices parciais/concorrrência.
 
 ## 9. Validação e rastreabilidade
+
+### Implementação da tarefa 18 — resumo e avaliação
+
+V16 adiciona convite único por OS entregue, avaliação e auditoria, além de URL
+Google opcional por oficina. O convite expira em `encerrada_em + 7 dias`; o HMAC
+tem finalidade exclusiva, hash persistido e vínculo com cliente/contato originais.
+Troca por sessão independente em `POST /api/portal/avaliacoes/acesso`; resumo em
+`GET /api/portal/avaliacoes/resumo`, resposta em `POST /api/portal/avaliacoes`.
+Todos revalidam estado/expiração/revogação/contato. CSRF nas escritas, limites por
+IP/tentativa e convite/envio. Credencial não concede `PORTAL_CLIENTE` ou papel de
+proprietário. Troca inválida apaga o grant anterior de avaliação.
+O envio exige `contexto` recebido no resumo (identificador não autorizador), que
+deve coincidir com o grant capturado da sessão. Formulário antigo após troca em
+outra aba recebe 409 sem gravação; a UI remove o resumo obsoleto. Parâmetro de
+token presente mas vazio é rejeitado, nunca usado para restaurar a sessão anterior.
+
+Resumo retorna somente oficina, modelo, número da OS, entrega e textos públicos.
+Não inclui CPF/placa/contato do cliente, custos, relato interno ou acesso a fotos.
+Unique(OS) e lock do convite serializam respostas; replay normalizado idêntico
+retorna a primeira, divergente responde 409. Consentimento começa false e guarda
+texto e instante quando autorizado. Nenhum endpoint publica depoimentos.
+
+Oficina: `GET /api/avaliacoes?page=0&size=20` (máximo 100), `GET/PATCH
+/api/avaliacoes/configuracao` e `POST/DELETE
+/api/ordens-servico/{id}/avaliacao/convite`. O Google aceita apenas HTTPS em
+formatos dedicados `g.page/r/.../review` e `search.google.com/local/writereview?placeid=...`.
+A UI `/avaliar` apresenta o mesmo link para todas as notas; `/avaliacoes` é privada.
+O worker reconstrói o convite só durante envio e cancela se não for mais elegível.
+Tokens não ficam na mensagem persistida, logs ou localStorage. Rotação de
+CODE_SECRET impede reconstrução dos tokens antigos; sessões/tokens já emitidos
+seguem sua expiração/revogação persistida.
+Detalhes e evidências: `tasks/prd-avaliacao-entrega/`.
 
 ### Implementação da tarefa 16 — compartilhamento manual
 

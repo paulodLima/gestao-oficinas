@@ -17,6 +17,9 @@ import { ShopProfile, ShopService } from '../oficina/shop.service';
       </a>
 
       <nav>
+        <a routerLink="/avaliacoes" routerLinkActive="active" aria-label="Avaliações dos clientes">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.2L5.8 21 7 14.2 2 9.3l6.9-1Z"/></svg><span>Avaliações</span>
+        </a>
         <a routerLink="/notificacoes" routerLinkActive="active" aria-label="Central de avisos">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v5l-2 3v2h16v-2l-2-3V8a6 6 0 0 0-6-6Zm0 20a3 3 0 0 0 3-3H9a3 3 0 0 0 3 3Z"/></svg><span>Avisos</span>
         </a>

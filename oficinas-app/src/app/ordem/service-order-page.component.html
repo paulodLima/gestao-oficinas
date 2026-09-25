@@ -42,6 +42,7 @@
           <h3>Relato de entrada</h3><p class="report">{{ order.relatoInicial }}</p>
           <app-order-share [order]="order" />
           <app-order-closure [order]="order" (closed)="orderClosed($event)" (returnVisit)="returnVisit($event)" />
+          @if (order.status === 'ENTREGUE') { <app-review-invitation [orderId]="order.id" /> }
           <fieldset [disabled]="!isActive(order)" aria-label="Operação e histórico da OS">
           <section class="workflow" aria-labelledby="workflow-title">
             <div class="subheading"><div><p class="step">03 / FLUXO</p><h3 id="workflow-title">Atualizar etapa</h3></div>

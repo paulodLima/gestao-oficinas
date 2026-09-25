@@ -19,11 +19,13 @@ public class OrderClosureService {
     private final OrderClosurePolicy policy;
     private final NotificationService notifications;
     private final Clock clock;
+    private final br.com.gestao.oficinas_api.avaliacao.ReviewAccessService reviews;
 
     public OrderClosureService(JdbcTemplate jdbc, ServiceOrderRepository orders, OrderClosurePolicy policy,
-                               NotificationService notifications, Clock clock) {
+                               NotificationService notifications, Clock clock, br.com.gestao.oficinas_api.avaliacao.ReviewAccessService reviews) {
         this.jdbc = jdbc; this.orders = orders; this.policy = policy;
         this.notifications = notifications; this.clock = clock;
+        this.reviews = reviews;
     }
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
@@ -74,6 +76,7 @@ public class OrderClosureService {
         jdbc.update("UPDATE portal_link_os SET revogado_em=? WHERE oficina_id=? AND ordem_servico_id=? AND revogado_em IS NULL", at, shop, id);
         jdbc.update("UPDATE adicional_desafio SET usado_em=? WHERE oficina_id=? AND ordem_servico_id=? AND usado_em IS NULL", at, shop, id);
         notifications.record(shop, id, NotificationEvent.ORDEM_ENCERRADA, id.toString());
+        if (input.tipo() == ServiceOrderStatus.ENTREGUE) reviews.issueForDelivery(shop, id);
         return orders.order(shop, id);
     }
 

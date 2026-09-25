@@ -8,6 +8,7 @@ import { FuelLevel, Inspection, InspectionChecklist, ServiceOrder, ServiceOrderE
 import { AdditionalRequestComponent } from './additional-request.component';
 import { OrderShareComponent } from './order-share.component';
 import { OrderClosureComponent } from './order-closure.component';
+import { ReviewInvitationComponent } from '../avaliacao/review-invitation.component';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
   'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
@@ -20,7 +21,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
 
 @Component({
   selector: 'app-service-order-page',
-  imports: [ReactiveFormsModule, AdditionalRequestComponent, OrderShareComponent, OrderClosureComponent],
+  imports: [ReactiveFormsModule, AdditionalRequestComponent, OrderShareComponent, OrderClosureComponent, ReviewInvitationComponent],
   templateUrl: './service-order-page.component.html',
   styleUrls: ['./service-order-page.component.css', './inspection.css']
 })

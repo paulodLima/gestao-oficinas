@@ -1,0 +1,53 @@
+<main class="review-shell">
+  <header class="brand"><span aria-hidden="true">OF</span><div><strong>{{ summary()?.atendimento?.oficinaNome || 'Gestão Oficinas' }}</strong><small>Resumo de entrega · acesso restrito</small></div></header>
+  @if (message()) { <p class="notice" role="alert">{{ message() }}</p> }
+  @if (!summary()) {
+    <section class="panel"><p class="eyebrow">PÓS-ATENDIMENTO</p><h1>{{ busy() ? 'Abrindo seu resumo…' : 'Acesso à avaliação' }}</h1>
+      <p>Use o convite enviado pela oficina, válido por sete dias após a entrega. Este acesso não reabre o acompanhamento.</p>
+      @if (!busy()) { <button type="button" (click)="load()">Tentar novamente</button> }
+    </section>
+  }
+  @if (summary(); as current) {
+    <section class="panel delivery" aria-labelledby="delivery-title">
+      <p class="eyebrow">ENTREGUE · OS {{ current.atendimento.numero }}</p>
+      <h1 id="delivery-title">Seu atendimento, concluído.</h1>
+      <p class="vehicle">{{ current.atendimento.veiculo }}</p>
+      <dl><div><dt>Entrega</dt><dd>{{ current.atendimento.entregueEm | date:'dd/MM/yyyy HH:mm':'-0300' }}</dd></div><div><dt>Avaliação disponível até</dt><dd>{{ current.expiraEm | date:'dd/MM/yyyy HH:mm':'-0300' }}</dd></div></dl>
+      @if (current.atualizacoes.length) {
+        <h2>Resumo do serviço</h2><ol class="timeline">@for (update of current.atualizacoes; track $index) {
+          <li><time>{{ update.createdAt | date:'dd/MM/yyyy':'-0300' }}</time><p>{{ update.texto }}</p></li>
+        }</ol>
+      }
+      <p class="muted">Somente registros públicos do atendimento. Custos internos e fotos não são exibidos neste resumo.</p>
+    </section>
+    <section class="panel" aria-labelledby="rating-title">
+      @if (current.avaliacao; as review) {
+        <p class="eyebrow">RESPOSTA REGISTRADA</p><h2 id="rating-title">Obrigado pela sua avaliação</h2>
+        <p class="result">{{ review.nota }} <span>/ 5</span></p>
+        @if (review.comentario) { <blockquote>{{ review.comentario }}</blockquote> }
+        <p>{{ review.consentimentoPublicacao ? 'Você autorizou uma eventual publicação sem identificação. Nada é publicado automaticamente.' : 'Sua avaliação é privada. Você não autorizou a publicação.' }}</p>
+        <p class="muted">Uma avaliação por atendimento. A oficina pode consultar sua resposta.</p>
+      } @else {
+        <p class="eyebrow">SUA EXPERIÊNCIA IMPORTA</p><h2 id="rating-title">Como foi o atendimento?</h2>
+        <p>Qualquer nota é bem-vinda. Sua resposta é privada por padrão.</p>
+        <form (ngSubmit)="submit()">
+          <fieldset [disabled]="busy()"><legend>Nota do atendimento</legend><div class="scores">
+            @for (value of scores; track value) { <label [class.selected]="score === value"><input type="radio" name="score" [value]="value" [(ngModel)]="score" [attr.aria-label]="value + (value === 1 ? ' estrela' : ' estrelas')"><span aria-hidden="true">★</span>{{ value }}</label> }
+          </div><div class="scale"><span>Insatisfeito</span><span>Muito satisfeito</span></div>
+          <label class="field" for="comment">Comentário (opcional)</label><textarea id="comment" name="comment" [(ngModel)]="comment" maxlength="2000" rows="4" placeholder="Conte o que funcionou e o que podemos melhorar."></textarea>
+          <p class="muted">Evite informar nomes, CPF, placa, telefone ou outros dados pessoais. {{ comment.length }}/2000</p>
+          <label class="consent"><input type="checkbox" name="consent" [(ngModel)]="consent"><span>{{ current.textoConsentimento }}</span></label>
+          <button type="submit">{{ busy() ? 'Enviando…' : 'Enviar avaliação' }}</button></fieldset>
+        </form>
+      }
+    </section>
+    @if (current.atendimento.googleUrl; as google) {
+      <section class="panel google"><div><h2>Também no Google, se quiser</h2><p>Disponível para qualquer nota. Uma nova avaliação, independente desta, na sua conta Google.</p></div><a [href]="google" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Avaliar no Google ↗</a></section>
+    }
+    <footer><strong>Precisa falar com a oficina?</strong>
+      @if (current.atendimento.telefone) { <a [href]="'tel:' + current.atendimento.telefone">{{ current.atendimento.telefone }}</a> }
+      @if (current.atendimento.email) { <a [href]="'mailto:' + current.atendimento.email">{{ current.atendimento.email }}</a> }
+      <small>Este convite não permite acessar fotos, aprovar serviços ou acompanhar uma nova OS.</small>
+    </footer>
+  }
+</main>
