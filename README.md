@@ -332,10 +332,41 @@ A sessão por identidade do cliente pode permanecer válida, mas não abre a OS 
 **Abrir nova OS para este veículo** confere o vínculo atual e prepara um atendimento
 novo, exigindo relato e quilometragem novos. O portal por identidade passa a mostrar
 a nova OS quando consultado novamente, se o vínculo continuar válido. Links antigos
-nunca redirecionam para a nova visita. Resumo público e avaliação pertencem à tarefa 18.
+nunca redirecionam para a nova visita. O resumo de entrega usa o convite separado descrito abaixo.
 
 Migração V15 e endpoints `GET/POST /api/ordens-servico/{id}/encerramento`.
 Evidências: [validação da tarefa 17](tasks/prd-encerramento-retorno/validacao.md).
+
+### Resumo de entrega e avaliação
+
+Ao confirmar uma **entrega**, o sistema registra um único convite, com validade de
+sete dias a partir do encerramento. Havendo e-mail verificado e envio transacional
+configurado, ele entra na fila existente. Cancelamento não gera convite. Falha de
+SMTP não desfaz a entrega; o histórico e o reenvio ficam na central de avisos.
+
+No detalhe de uma OS entregue, **Obter link de avaliação** permite copiar o convite
+para o responsável, sem enviar mensagens automaticamente. **Revogar convite** exige
+confirmação e bloqueia inclusive sessões abertas. Não há reemissão após revogação
+nem prorrogação dos sete dias. Não há disparo retroativo em massa para OS antigas.
+
+Em `/avaliar`, o cliente consulta apenas modelo do veículo, entrega e atualizações
+já públicas; não recebe custos internos, CPF, placa, dados de outros clientes ou
+fotos. O convite não reabre a OS e não libera outra visita. Nota inteira de 1 a 5,
+comentário opcional de até 2000 caracteres, uma avaliação por OS. Reenvio idêntico
+é seguro; outra resposta não substitui a primeira.
+
+A avaliação é privada por padrão. O consentimento para eventual publicação é
+opcional e separado; **não existe publicação automática nem catálogo público de
+depoimentos**. Em **Avaliações**, o proprietário consulta respostas paginadas e
+configura opcionalmente o link de avaliação do Google. Aceitamos
+`https://g.page/r/IDENTIFICADOR/review` ou
+`https://search.google.com/local/writereview?placeid=IDENTIFICADOR`. Ele aparece
+para todas as notas, antes e depois da resposta, sem transportar comentário ou nota.
+
+Para clientes externos, configure `PUBLIC_URL` com o endereço HTTPS público e
+o SMTP; `localhost` só funciona na própria máquina. Mantenha `CODE_SECRET` protegido
+e estável: a troca do segredo impede reconstruir convites antigos para reenvio.
+Migração V16. [Detalhamento e validação](tasks/prd-avaliacao-entrega/validacao.md).
 
 ### Docker não está disponível
 

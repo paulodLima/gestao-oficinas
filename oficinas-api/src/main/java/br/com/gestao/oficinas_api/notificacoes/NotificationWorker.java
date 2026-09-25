@@ -16,14 +16,17 @@ public class NotificationWorker {
     private final TransactionalEmail email;
     private final Clock clock;
     private final AuthProperties auth;
-    public NotificationWorker(JdbcTemplate jdbc, TransactionalEmail email, Clock clock, AuthProperties auth) {
+    private final br.com.gestao.oficinas_api.avaliacao.ReviewAccessService reviews;
+    public NotificationWorker(JdbcTemplate jdbc, TransactionalEmail email, Clock clock, AuthProperties auth,
+                              br.com.gestao.oficinas_api.avaliacao.ReviewAccessService reviews) {
         this.jdbc = jdbc; this.email = email; this.clock = clock; this.auth = auth;
+        this.reviews = reviews;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean processOne() {
         var pending = jdbc.query("""
-            SELECT e.*,n.titulo,n.mensagem,o.nome oficina_nome,o.slug oficina_slug FROM notificacao_email e
+            SELECT e.*,n.titulo,n.mensagem,n.evento,n.referencia,o.nome oficina_nome,o.slug oficina_slug FROM notificacao_email e
               JOIN notificacao n ON n.id=e.notificacao_id
               JOIN oficina o ON o.id=n.oficina_id
              WHERE e.estado='PENDENTE' AND e.proxima_tentativa_em<=?
@@ -32,7 +35,7 @@ public class NotificationWorker {
                 rs.getObject("cliente_id", UUID.class), rs.getString("destinatario"),
                 rs.getTimestamp("verificado_em"), rs.getInt("tentativas"), rs.getInt("tentativas_ciclo"),
                 rs.getString("titulo"), rs.getString("mensagem"), rs.getString("oficina_nome"),
-                rs.getString("oficina_slug")), Timestamp.from(clock.instant()));
+                rs.getString("oficina_slug"), rs.getString("evento"), rs.getString("referencia")), Timestamp.from(clock.instant()));
         if (pending.isEmpty()) return false;
         Pending item = pending.getFirst();
         // Hold a contact lock through delivery so an email change cannot overtake validation.
@@ -45,11 +48,19 @@ public class NotificationWorker {
             return true;
         }
         try {
+            if ("AVALIACAO_SOLICITADA".equals(item.event())) {
+                var link = reviews.emailLink(item.shop(), UUID.fromString(item.reference()));
+                if (link.isEmpty()) { finish(item, "CANCELADO", "CONVITE_INDISPONIVEL", false); return true; }
+                email.send(item.recipient(), item.title() + " · Gestão Oficinas", item.message()
+                    + "\n\nOficina: " + item.shopName() + "\nConsulte o resumo e avalie seu atendimento: " + link.get()
+                    + "\nO acesso expira sete dias após a entrega e não reabre a OS. Sua avaliação é privada por padrão.");
+            } else {
             email.send(item.recipient(), item.title() + " · Gestão Oficinas", item.message()
                 + "\n\nOficina: " + item.shopName() + "\nIdentificador da oficina: " + item.shopSlug()
                 + "\n\nConsulte os detalhes no portal da oficina: " + auth.publicUrl() + "/acompanhar"
                 + "\nInforme o identificador acima e a placa do veículo para receber seu código de acesso."
                 + "\nO acesso continua exigindo sua identificação. Este e-mail não autoriza serviços.");
+            }
         } catch (RuntimeException failure) {
             // Never persist provider exception messages or addresses in logs/API responses.
             finish(item, "FALHOU", "EMAIL_INDISPONIVEL", item.cycle() + 1 < 5);
@@ -78,5 +89,5 @@ public class NotificationWorker {
             default -> throw new IllegalArgumentException("Limite de tentativas atingido"); });
     }
     private record Pending(UUID id, UUID shop, UUID customer, String recipient, Timestamp verified,
-                           int attempts, int cycle, String title, String message, String shopName, String shopSlug) {}
+                           int attempts, int cycle, String title, String message, String shopName, String shopSlug, String event, String reference) {}
 }

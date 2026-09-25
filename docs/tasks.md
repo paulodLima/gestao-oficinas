@@ -38,7 +38,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [ ] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
 - [x] 16.0 Compartilhamento manual pelo WhatsApp — [Trello](https://trello.com/c/rHAC9p6Z)
 - [x] 17.0 Encerramento, cancelamento e retorno do veículo — [Trello](https://trello.com/c/5A1vsurk)
-- [ ] 18.0 Resumo de entrega e avaliação — [Trello](https://trello.com/c/8ZDp53o3)
+- [x] 18.0 Resumo de entrega e avaliação — [Trello](https://trello.com/c/8ZDp53o3)
 - [ ] 19.0 Auditoria e testes de autorização — [Trello](https://trello.com/c/g2RG0IJA)
 - [ ] 20.0 Validação móvel e entrega do MVP — [Trello](https://trello.com/c/YphJ3GJG)
 
@@ -730,11 +730,11 @@ Resumo restrito e convite para nota 1–5 com comentário após entrega.
 
 ## Subtarefas
 
-- [ ] 18.1 Gerar resumo público restrito da entrega sem custos internos.
-- [ ] 18.2 Emitir convite de avaliação independente, com sete dias de validade.
-- [ ] 18.3 Registrar uma nota 1–5/comentário por OS entregue e consentimento específico para publicação.
-- [ ] 18.4 Exibir resultados privados para oficina e link Google independente da nota.
-- [ ] 18.5 Testes unitários: nota, validade e consentimento; integração: duplicidade e escopo da credencial; E2E: avaliar sem reativar OS encerrada.
+- [x] 18.1 Gerar resumo público restrito da entrega sem custos internos.
+- [x] 18.2 Emitir convite de avaliação independente, com sete dias de validade.
+- [x] 18.3 Registrar uma nota 1–5/comentário por OS entregue e consentimento específico para publicação.
+- [x] 18.4 Exibir resultados privados para oficina e link Google independente da nota.
+- [x] 18.5 Testes unitários: nota, validade e consentimento; integração: duplicidade e escopo da credencial; E2E: avaliar sem reativar OS encerrada.
 
 ## Critérios de aceite
 
@@ -747,9 +747,15 @@ Resumo restrito e convite para nota 1–5 com comentário após entrega.
 
 ## Entrega e validação
 
-Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
+Implementada em 25/09/2026. Migração V16, convite/outbox, resumo e avaliação
+restritos, consentimento privado por padrão, central paginada e Google opcional.
+API 121 testes, Angular 97, E2E 34 (desktop/mobile) e builds aprovados. Revisão
+independente aprovada após correções de contexto entre abas e token vazio.
+Evidências: [validação](../tasks/prd-avaliacao-entrega/validacao.md) e
+[revisão](../tasks/prd-avaliacao-entrega/18_task_review.md).
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída. Sem publicação automática de depoimentos, mensagens reais nos
+testes ou deploy de produção.
 
 ---
 
