@@ -86,9 +86,12 @@ class PortalAccessIntegrationTest {
         verify(mail).send(eq(fixture.email()), anyString(), anyString());
 
         Challenge limited = challenge(fixture, anonymous);
+        String wrongCode = "999999".equals(limited.code()) ? "000000" : "999999";
         for (int attempt = 0; attempt < 5; attempt++) {
             assertEquals(400, anonymous.send("POST", "/api/portal/acesso/validacao",
-                Map.of("desafioId", limited.id(), "codigo", "999999")).statusCode());
+                Map.of("desafioId", limited.id(), "codigo", wrongCode)).statusCode());
+            assertEquals(attempt + 1, jdbc.queryForObject("SELECT tentativas FROM portal_desafio WHERE id=?",
+                Integer.class, limited.id()));
         }
         assertEquals(400, anonymous.send("POST", "/api/portal/acesso/validacao",
             Map.of("desafioId", limited.id(), "codigo", limited.code())).statusCode());

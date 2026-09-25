@@ -93,7 +93,7 @@ public class PortalAccessController {
     }
 
     @PostMapping("/acesso/validacao")
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public ResponseEntity<Void> validateCode(@RequestBody Validate body, HttpSession session) {
         if (body.desafioId() == null || body.codigo() == null || !body.codigo().matches("[0-9]{6}")) {
             throw invalidCode();

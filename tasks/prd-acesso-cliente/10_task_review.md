@@ -9,7 +9,11 @@
 
 ## Resumo
 
-A implementação atende ao fluxo seguro de acesso do cliente por código temporário ou link exclusivo de OS. A revisão confirmou não enumeração, uso único, limite de tentativas, isolamento por oficina, revalidação de vínculo/link/OS e separação entre leitura pública e privilégios da oficina.
+A implementação entrega o fluxo de acesso por código temporário ou link exclusivo de OS.
+Na reconferência de 25/09/2026, foi identificado e corrigido um defeito que a revisão anterior
+não detectou: o erro de código inválido revertia o incremento de tentativas. O teste com
+o interceptor transacional real do Spring reproduziu o rollback indevido antes da correção
+e confirmou o commit da tentativa depois dela. Falhas de infraestrutura continuam provocando rollback.
 
 ## Arquivos Revisados
 
@@ -29,7 +33,9 @@ A implementação atende ao fluxo seguro de acesso do cliente por código tempor
 
 ### 🔴 Problemas Críticos
 
-Nenhum problema crítico encontrado.
+Corrigido: `PortalAccessController.validateCode` usava o rollback padrão para `ApiException`,
+desfazendo o contador de tentativas inválidas. A exceção de negócio agora preserva a tentativa.
+`PortalAccessTransactionTest` cobre commit no erro de código e rollback no erro de persistência.
 
 ### 🟡 Problemas Major
 
@@ -58,7 +64,7 @@ Nenhum problema major encontrado.
 | REST/HTTP | ✅ |
 | Logging | ✅ |
 | React | N/A |
-| Testes | ✅ |
+| Testes | ⚠️ Integração PostgreSQL não executada; testes direcionados aprovados |
 
 ## Recomendações
 
@@ -67,4 +73,10 @@ Nenhum problema major encontrado.
 
 ## Veredito
 
-Entrega aprovada. Os fluxos e controles exigidos estão implementados e cobertos; a indisponibilidade local do Docker é uma limitação de infraestrutura, não uma falha do código.
+Correção aprovada nos testes executados: Java 4/4 (política e transação), Angular 5/5
+(acesso, seleção de veículo, galeria e sessão). O teste HTTP/PostgreSQL foi reforçado para
+verificar cada incremento e garantir que o código incorreto nunca coincida com o sorteado.
+Ele compilou, mas sua execução continua pendente porque o Docker local está parado.
+Essa limitação não demonstra ausência de outros defeitos de integração.
+
+Referência: [Spring — regras de rollback](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
