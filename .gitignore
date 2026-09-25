@@ -1,2 +1,4 @@
 # Local execution evidence; summarized in task validation reports.
 task*-*.log
+/artifacts/
+/test-results/

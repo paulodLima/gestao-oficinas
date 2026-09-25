@@ -55,6 +55,7 @@ class PortalAccessIntegrationTest {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired PhotoStorage storage;
+    @Autowired br.com.gestao.oficinas_api.ordem.PhotoProperties photoProperties;
     @MockitoBean TransactionalEmail mail;
     private final ObjectMapper mapper = new ObjectMapper();
     private static final String PASSWORD = "Oficina-segura-123";
@@ -300,7 +301,7 @@ class PortalAccessIntegrationTest {
                 Map.of("desafioId", challenge.id(), "codigo", challenge.code())).statusCode());
             var content = customer.client.send(HttpRequest.newBuilder(uri(publicPath)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
             assertEquals(200, content.statusCode());
-            assertArrayEquals(bytes.toByteArray(), content.body());
+            assertArrayEquals(storage.read(stored.key()), content.body());
             assertTrue(content.headers().firstValue("Cache-Control").orElse("").contains("no-store"));
             assertEquals(401, new Browser().get(publicPath).statusCode());
             assertEquals(200, fixture.owner().get(ownerPath).statusCode());
@@ -323,6 +324,38 @@ class PortalAccessIntegrationTest {
             storage.delete(stored.key());
             storage.delete(stored.thumbnailKey());
         }
+    }
+
+    @Test
+    void enlargedPhotosRemoveCameraMetadataForNewAndLegacyFiles() throws Exception {
+        Fixture fixture = fixture("GPS1A23", "52998224725");
+        UUID owner = jdbc.queryForObject("SELECT criado_por FROM ordem_servico WHERE id=?", UUID.class, fixture.orderId());
+        byte[] original = br.com.gestao.oficinas_api.support.PhotoFixture.cameraJpeg();
+        var stored = storage.store(new org.springframework.mock.web.MockMultipartFile("file", "camera.jpg", "image/jpeg", original));
+        String legacyKey = UUID.randomUUID() + ".jpg";
+        java.nio.file.Path legacy = java.nio.file.Paths.get(photoProperties.storagePath()).resolve(legacyKey);
+        java.nio.file.Files.write(legacy, original);
+        try {
+            UUID photo = insertPhoto(fixture, owner, "RECEBIDO", true, "camera.jpg", "1 minute");
+            Browser customer = new Browser();
+            Challenge code = challenge(fixture, customer);
+            assertEquals(204, customer.send("POST", "/api/portal/acesso/validacao",
+                Map.of("desafioId", code.id(), "codigo", code.code())).statusCode());
+            for (String key : java.util.List.of(stored.key(), legacyKey)) {
+                jdbc.update("UPDATE ordem_servico_foto SET chave_arquivo=?,tipo_conteudo='image/jpeg' WHERE id=?", key, photo);
+                String path = "/api/portal/ordens-servico/" + fixture.orderId() + "/fotos/" + photo + "/conteudo?tamanho=original";
+                var response = customer.client.send(HttpRequest.newBuilder(uri(path)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+                assertEquals(200, response.statusCode());
+                assertEquals("image/jpeg", response.headers().firstValue("Content-Type").orElseThrow());
+                var image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(response.body()));
+                assertEquals(40, image.getWidth()); assertEquals(80, image.getHeight());
+                assertTrue(new java.awt.Color(image.getRGB(20, 15)).getRed() > 200);
+                var metadata = com.drew.imaging.ImageMetadataReader.readMetadata(new java.io.ByteArrayInputStream(response.body()));
+                assertNull(metadata.getFirstDirectoryOfType(com.drew.metadata.exif.ExifIFD0Directory.class));
+                assertNull(metadata.getFirstDirectoryOfType(com.drew.metadata.exif.GpsDirectory.class));
+            }
+            assertArrayEquals(original, java.nio.file.Files.readAllBytes(legacy));
+        } finally { storage.delete(stored.key()); storage.delete(stored.thumbnailKey()); storage.delete(legacyKey); }
     }
 
     @Test

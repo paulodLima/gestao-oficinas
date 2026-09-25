@@ -13,6 +13,9 @@ import {
   template: `
     @if (loading()) {
       <section class="additional-card subtle" aria-live="polite">Carregando solicitações adicionais…</section>
+    } @else if (loadError()) {
+      <section class="additional-card"><p role="alert">Não foi possível carregar os serviços adicionais.</p>
+        <button type="button" class="primary" (click)="load()">Recarregar serviços adicionais</button></section>
     } @else if (requests().length) {
       <section class="additional-card" aria-labelledby="additional-title">
         <header><div><p class="eyebrow">APROVAÇÃO DO CLIENTE</p><h2 id="additional-title">Serviços adicionais</h2></div>
@@ -84,6 +87,7 @@ export class AdditionalDecisionComponent implements OnChanges {
   private readonly service = inject(AdditionalDecisionService);
   readonly requests = signal<AdditionalRequest[]>([]);
   readonly loading = signal(false);
+  readonly loadError = signal(false);
   readonly busy = signal(false);
   readonly message = signal('');
   readonly activeRequest = signal('');
@@ -96,9 +100,9 @@ export class AdditionalDecisionComponent implements OnChanges {
   ngOnChanges() { if (this.orderId) void this.load(); }
 
   async load() {
-    this.loading.set(true);
+    this.loading.set(true); this.loadError.set(false);
     try { this.requests.set(await this.service.list(this.orderId)); }
-    catch { this.message.set('Não foi possível carregar os serviços adicionais.'); }
+    catch { this.loadError.set(true); }
     finally { this.loading.set(false); }
   }
 

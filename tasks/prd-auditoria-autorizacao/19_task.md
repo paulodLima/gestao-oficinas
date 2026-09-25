@@ -14,7 +14,7 @@ Tarefas 2–18 presentes na master. Documentação global e relatórios individu
 - [x] 19.4 Verificar proteção de dados em URLs/logs e configuração HTTPS.
 - [x] 19.5 Executar regressão completa, incluindo concorrência e auditoria persistente.
 - [x] Revisão independente sem bloqueadores.
-- [ ] Publicar branch, merge na master e atualizar Trello.
+- [x] Publicar branch, merge na master e atualizar Trello — branch `b06e21c`, merge `7d1262b`; card em Concluído e marcado como completo.
 
 ## Restrições
 

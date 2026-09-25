@@ -97,9 +97,9 @@ export class ServiceOrderService {
       { headers: await this.headers() }));
   }
   photos(id: string) { return firstValueFrom(this.http.get<ServicePhoto[]>(`/api/ordens-servico/${id}/fotos`)); }
-  async uploadPhoto(id: string, file: File, stage: ServiceOrderStatus, uploadId: string) {
+  async uploadPhoto(id: string, file: File, stage: ServiceOrderStatus, uploadId: string, published = false) {
     const data = new FormData(); data.append('arquivo', file); data.append('etapa', stage);
-    data.append('legenda', ''); data.append('publicada', 'false'); data.append('uploadId', uploadId);
+    data.append('legenda', ''); data.append('publicada', String(published)); data.append('uploadId', uploadId);
     return this.http.post<ServicePhoto>(`/api/ordens-servico/${id}/fotos`, data, { headers: await this.headers(), observe: 'events', reportProgress: true });
   }
   photoUrl(orderId: string, photoId: string, thumbnail = true) { return `/api/ordens-servico/${orderId}/fotos/${photoId}/arquivo?miniatura=${thumbnail}`; }
