@@ -31,7 +31,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
 - [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
 - [ ] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
-- [ ] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
+- [x] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
 - [x] 12.0 Previsão de conclusão e atrasos — [Trello](https://trello.com/c/eE1TpMrV)
 - [ ] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
 - [ ] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
@@ -450,11 +450,11 @@ Mostrar serviço ativo, status, previsão, pendências, atualização e galeria 
 
 ## Subtarefas
 
-- [ ] 11.1 Criar consulta do serviço ativo autorizado com dados públicos mínimos.
-- [ ] 11.2 Construir cabeçalho com oficina/veículo, status, previsão, pendências e última atualização.
-- [ ] 11.3 Exibir galeria completa abaixo do status, filtro por etapa, zoom/deslize e linha do tempo.
-- [ ] 11.4 Implementar estados sem OS ativa e acesso expirado.
-- [ ] 11.5 Testes unitários: ordenação e filtros; integração: nenhum campo/foto interno; E2E: fotos antigas permanecem na mudança de status.
+- [x] 11.1 Criar consulta do serviço ativo autorizado com dados públicos mínimos.
+- [x] 11.2 Construir cabeçalho com oficina/veículo, status, previsão, pendências e última atualização.
+- [x] 11.3 Exibir galeria completa abaixo do status, filtro por etapa, zoom/deslize e linha do tempo.
+- [x] 11.4 Implementar estados sem OS ativa e acesso expirado.
+- [x] 11.5 Testes unitários: ordenação e filtros; integração: nenhum campo/foto interno; E2E: fotos antigas permanecem na mudança de status.
 
 ## Critérios de aceite
 
@@ -469,7 +469,10 @@ Mostrar serviço ativo, status, previsão, pendências, atualização e galeria 
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída em 25/09/2026. Projeções públicas mínimas, cabeçalho do serviço, contato no estado vazio,
+galeria cronológica com filtro e lightbox, gesto horizontal, linha do tempo e expiração de acesso entregues.
+Evidências: [task-11-validacao.md](task-11-validacao.md); revisão:
+[11_task_review.md](../tasks/prd-portal-cliente/11_task_review.md).
 
 ---
 

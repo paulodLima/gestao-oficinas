@@ -168,6 +168,81 @@ class PortalAccessIntegrationTest {
             Map.of("token", expiring.get("token").asText())).statusCode());
     }
 
+    @Test
+    void returnsOnlyPublicPortalDataAndKeepsPublishedPhotosFromPreviousStages() throws Exception {
+        Fixture fixture = fixture("GAL1A23", "52998224725");
+        jdbc.update("UPDATE oficina SET telefone=?,email_contato=? WHERE id=?",
+            "(61) 3333-4444", "contato@oficina.test", fixture.shopId());
+        UUID ownerId = jdbc.queryForObject("SELECT criado_por FROM ordem_servico WHERE id=?", UUID.class,
+            fixture.orderId());
+        UUID publicEvent = UUID.randomUUID();
+        UUID privateEvent = UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO ordem_servico_evento(id,oficina_id,ordem_servico_id,tipo,texto_publico,
+              texto_interno,publicada,autor_id,created_at)
+            VALUES (?,?,?,'ATUALIZACAO','Diagnóstico concluído.','custo interno sigiloso',true,?,now()-interval '1 day')
+            """, publicEvent, fixture.shopId(), fixture.orderId(), ownerId);
+        jdbc.update("""
+            INSERT INTO ordem_servico_evento(id,oficina_id,ordem_servico_id,tipo,texto_interno,
+              publicada,autor_id)
+            VALUES (?,?,?,'ATUALIZACAO','não publicar diagnóstico',false,?)
+            """, privateEvent, fixture.shopId(), fixture.orderId(), ownerId);
+
+        UUID entrancePhoto = insertPhoto(fixture, ownerId, "RECEBIDO", true, "entrada.jpg", "2 days");
+        UUID currentPhoto = insertPhoto(fixture, ownerId, "EM_MANUTENCAO", true, "motor.jpg", "1 hour");
+        UUID privatePhoto = insertPhoto(fixture, ownerId, "EM_DIAGNOSTICO", false, "interna.jpg", "30 minutes");
+        jdbc.update("UPDATE ordem_servico SET status='EM_MANUTENCAO' WHERE id=?", fixture.orderId());
+
+        Browser customer = new Browser();
+        Challenge challenge = challenge(fixture, customer);
+        assertEquals(204, customer.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", challenge.id(), "codigo", challenge.code())).statusCode());
+
+        JsonNode current = mapper.readTree(customer.get("/api/portal/servico-atual?veiculoId="
+            + fixture.vehicleId()).body());
+        assertEquals("(61) 3333-4444", current.get("oficina").get("telefone").asText());
+        JsonNode service = current.get("servico");
+        assertEquals("EM_MANUTENCAO", service.get("status").asText());
+        assertTrue(service.has("ultimaAtualizacao"));
+        assertFalse(service.has("relatoInicial"));
+        assertFalse(service.has("clienteId"));
+        assertFalse(service.has("observacaoInterna"));
+
+        JsonNode updates = mapper.readTree(customer.get("/api/portal/ordens-servico/"
+            + fixture.orderId() + "/atualizacoes").body());
+        assertEquals(1, updates.size());
+        assertEquals(publicEvent.toString(), updates.get(0).get("id").asText());
+        assertFalse(updates.get(0).has("autor"));
+        assertFalse(updates.toString().contains("sigiloso"));
+        assertFalse(updates.toString().contains(privateEvent.toString()));
+
+        JsonNode photos = mapper.readTree(customer.get("/api/portal/ordens-servico/"
+            + fixture.orderId() + "/fotos").body());
+        assertEquals(2, photos.size());
+        assertEquals(entrancePhoto.toString(), photos.get(0).get("id").asText());
+        assertEquals(currentPhoto.toString(), photos.get(1).get("id").asText());
+        assertFalse(photos.toString().contains(privatePhoto.toString()));
+
+        jdbc.update("UPDATE ordem_servico SET status='ENTREGUE',encerrada_em=now() WHERE id=?",
+            fixture.orderId());
+        JsonNode empty = mapper.readTree(customer.get("/api/portal/servico-atual?veiculoId="
+            + fixture.vehicleId()).body());
+        assertTrue(empty.get("servico").isNull());
+        assertEquals("contato@oficina.test", empty.get("oficina").get("email").asText());
+    }
+
+    private UUID insertPhoto(Fixture fixture, UUID ownerId, String stage, boolean published,
+                             String name, String age) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO ordem_servico_foto(id,oficina_id,ordem_servico_id,etapa,legenda,publicada,
+              estado,nome_arquivo,tipo_conteudo,tamanho_bytes,chave_arquivo,upload_id,criado_por,created_at)
+            VALUES (?,?,?,?,?,?,'PRONTA',?,'image/jpeg',100,?,?,?,now()-(?::interval))
+            """, id, fixture.shopId(), fixture.orderId(), stage, name, published, name,
+            "portal-test/" + id, UUID.randomUUID(), ownerId, age);
+        return id;
+    }
+
     private Fixture fixture(String plate, String cpf) throws Exception {
         String ownerEmail = UUID.randomUUID() + "@owner.test";
         Browser owner = new Browser();

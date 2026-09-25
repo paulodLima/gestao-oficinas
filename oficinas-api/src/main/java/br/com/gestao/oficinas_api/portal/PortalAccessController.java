@@ -12,11 +12,9 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -173,64 +171,83 @@ public class PortalAccessController {
     }
 
     @GetMapping("/servico-atual")
-    public Map<String, Object> current(HttpSession session, @RequestParam(required = false) UUID veiculoId) {
+    public CurrentService current(HttpSession session, @RequestParam(required = false) UUID veiculoId) {
         Grant grant = grant(session);
+        Office office = jdbc.queryForObject("""
+            SELECT nome,telefone,email_contato FROM oficina WHERE id=?
+            """, (result, row) -> new Office(result.getString(1), result.getString(2), result.getString(3)),
+            grant.office());
         var rows = jdbc.query("""
             SELECT os.id,os.numero,os.status,os.previsao_em,v.placa,
-                   concat_ws(' ',v.marca,v.modelo) veiculo,o.nome oficina
+                   concat_ws(' ',v.marca,v.modelo) veiculo,
+                   previsao.motivo_publico,previsao.proxima_acao,
+                   GREATEST(
+                     os.created_at,
+                     COALESCE((SELECT max(e.created_at) FROM ordem_servico_evento e
+                       WHERE e.oficina_id=os.oficina_id AND e.ordem_servico_id=os.id
+                         AND e.publicada=true AND nullif(btrim(e.texto_publico),'') IS NOT NULL), os.created_at),
+                     COALESCE((SELECT max(f.created_at) FROM ordem_servico_previsao f
+                       WHERE f.oficina_id=os.oficina_id AND f.ordem_servico_id=os.id), os.created_at),
+                     COALESCE((SELECT max(foto.created_at) FROM ordem_servico_foto foto
+                       WHERE foto.oficina_id=os.oficina_id AND foto.ordem_servico_id=os.id
+                         AND foto.estado='PRONTA' AND foto.publicada=true), os.created_at)
+                   ) ultima_atualizacao
               FROM ordem_servico os
               JOIN veiculo v ON v.id=os.veiculo_id AND v.oficina_id=os.oficina_id
-              JOIN oficina o ON o.id=os.oficina_id
               LEFT JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id
                    AND l.veiculo_id=v.id AND l.fim_em IS NULL
+              LEFT JOIN LATERAL (
+                SELECT f.motivo_publico,f.proxima_acao
+                  FROM ordem_servico_previsao f
+                 WHERE f.oficina_id=os.oficina_id AND f.ordem_servico_id=os.id
+                 ORDER BY f.created_at DESC,f.id DESC LIMIT 1
+              ) previsao ON true
              WHERE os.oficina_id=? AND os.encerrada_em IS NULL
                AND (?::uuid IS NULL OR os.veiculo_id=?)
                AND (?::uuid IS NULL OR l.cliente_id=?)
                AND (?::uuid IS NULL OR os.id=?)
              ORDER BY os.entrada_em DESC LIMIT 1
-            """, (result, row) -> Map.<String, Object>of(
-                "id", result.getObject("id", UUID.class), "numero", result.getLong("numero"),
-                "status", result.getString("status"),
-                "previsaoEm", result.getTimestamp("previsao_em") == null ? ""
-                    : result.getTimestamp("previsao_em").toInstant().toString(),
-                "placa", result.getString("placa"), "veiculo", result.getString("veiculo"),
-                "oficina", result.getString("oficina")),
+            """, (result, row) -> new Service(
+                result.getObject("id", UUID.class), result.getLong("numero"), result.getString("status"),
+                instant(result.getTimestamp("previsao_em")), result.getString("placa"),
+                result.getString("veiculo"), publicPending(result.getString("status")),
+                result.getString("motivo_publico"), result.getString("proxima_acao"),
+                result.getTimestamp("ultima_atualizacao").toInstant()),
             grant.office(), veiculoId, veiculoId, grant.customer(), grant.customer(), grant.order(), grant.order());
-        return Collections.singletonMap("servico", rows.isEmpty() ? null : rows.getFirst());
+        return new CurrentService(office, rows.isEmpty() ? null : rows.getFirst());
     }
 
     @GetMapping("/ordens-servico/{id}/atualizacoes")
-    public List<Map<String, Object>> updates(HttpSession session, @PathVariable UUID id) {
+    public List<PublicUpdate> updates(HttpSession session, @PathVariable UUID id) {
         Grant grant = authorize(session, id);
         return jdbc.query("""
-            SELECT e.id,e.tipo,e.status_anterior,e.status_novo,e.texto_publico,e.created_at,p.nome
-              FROM ordem_servico_evento e JOIN proprietario p ON p.id=e.autor_id
+            SELECT e.id,e.tipo,e.status_anterior,e.status_novo,e.texto_publico,e.created_at
+              FROM ordem_servico_evento e
              WHERE e.oficina_id=? AND e.ordem_servico_id=? AND e.publicada=true
-               AND e.texto_publico IS NOT NULL ORDER BY e.created_at DESC
-            """, (result, row) -> Map.<String, Object>of(
-                "id", result.getObject(1, UUID.class), "tipo", result.getString(2),
-                "statusAnterior", Optional.ofNullable(result.getString(3)).orElse(""),
-                "statusNovo", Optional.ofNullable(result.getString(4)).orElse(""),
-                "texto", result.getString(5), "createdAt", result.getTimestamp(6).toInstant().toString(),
-                "autor", result.getString(7)), grant.office(), id);
+               AND nullif(btrim(e.texto_publico),'') IS NOT NULL
+             ORDER BY e.created_at ASC,e.id ASC
+            """, (result, row) -> new PublicUpdate(
+                result.getObject(1, UUID.class), result.getString(2), result.getString(3),
+                result.getString(4), result.getString(5), result.getTimestamp(6).toInstant()),
+            grant.office(), id);
     }
 
     @GetMapping("/ordens-servico/{id}/fotos")
-    public List<Map<String, Object>> photos(HttpSession session, @PathVariable UUID id) {
+    public List<PublicPhotoView> photos(HttpSession session, @PathVariable UUID id) {
         Grant grant = authorize(session, id);
         return jdbc.query("""
             SELECT id,etapa,legenda,created_at FROM ordem_servico_foto
              WHERE oficina_id=? AND ordem_servico_id=? AND estado='PRONTA' AND publicada=true
-             ORDER BY created_at ASC
-            """, (result, row) -> Map.<String, Object>of(
-                "id", result.getObject(1, UUID.class), "etapa", result.getString(2),
-                "legenda", Optional.ofNullable(result.getString(3)).orElse(""),
-                "createdAt", result.getTimestamp(4).toInstant().toString()), grant.office(), id);
+             ORDER BY created_at ASC,id ASC
+            """, (result, row) -> new PublicPhotoView(
+                result.getObject(1, UUID.class), result.getString(2), result.getString(3),
+                result.getTimestamp(4).toInstant()), grant.office(), id);
     }
 
     @GetMapping("/ordens-servico/{orderId}/fotos/{photoId}/conteudo")
     public ResponseEntity<byte[]> photo(HttpSession session, @PathVariable UUID orderId,
-                                        @PathVariable UUID photoId) {
+                                        @PathVariable UUID photoId,
+                                        @RequestParam(defaultValue = "miniatura") String tamanho) {
         Grant grant = authorize(session, orderId);
         var rows = jdbc.query("""
             SELECT chave_miniatura,chave_arquivo,tipo_conteudo FROM ordem_servico_foto
@@ -241,9 +258,10 @@ public class PortalAccessController {
             throw new ApiException(404, "FOTO_NAO_ENCONTRADA", "Foto não encontrada.");
         }
         PublicPhoto photo = rows.getFirst();
-        String key = photo.thumb() == null ? photo.key() : photo.thumb();
+        boolean original = "original".equalsIgnoreCase(tamanho);
+        String key = original || photo.thumb() == null ? photo.key() : photo.thumb();
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-            .contentType(MediaType.parseMediaType(photo.thumb() == null ? photo.type() : "image/jpeg"))
+            .contentType(MediaType.parseMediaType(original || photo.thumb() == null ? photo.type() : "image/jpeg"))
             .body(storage.read(key));
     }
 
@@ -383,10 +401,27 @@ public class PortalAccessController {
         return new ApiException(404, "SERVICO_NAO_ENCONTRADO", "Serviço não encontrado.");
     }
 
+    private String publicPending(String status) {
+        return switch (status) {
+            case "AGUARDANDO_APROVACAO" -> "Aguardando aprovação do cliente";
+            case "AGUARDANDO_PECAS" -> "Aguardando chegada de peças";
+            case "PRONTO_PARA_RETIRADA" -> "Veículo pronto para retirada";
+            default -> null;
+        };
+    }
+
     public record Request(String oficinaSlug, String placa) {}
     public record Validate(UUID desafioId, String codigo) {}
     public record Link(String token) {}
     public record Vehicle(UUID id, String placa, String veiculo) {}
+    public record CurrentService(Office oficina, Service servico) {}
+    public record Office(String nome, String telefone, String email) {}
+    public record Service(UUID id, long numero, String status, Instant previsaoEm, String placa,
+                          String veiculo, String pendencia, String motivoPrevisao,
+                          String proximaAcao, Instant ultimaAtualizacao) {}
+    public record PublicUpdate(UUID id, String tipo, String statusAnterior, String statusNovo,
+                               String texto, Instant createdAt) {}
+    public record PublicPhotoView(UUID id, String etapa, String legenda, Instant createdAt) {}
     private record Target(UUID id, String email) {}
     private record Challenge(UUID office, UUID customer, String plate, String hash, Instant expires,
                              int attempts, Instant used) {}
