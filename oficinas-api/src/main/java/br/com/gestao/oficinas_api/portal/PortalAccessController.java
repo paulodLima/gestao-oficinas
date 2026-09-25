@@ -2,12 +2,13 @@ package br.com.gestao.oficinas_api.portal;
 
 import br.com.gestao.oficinas_api.identidade.ApiException;
 import br.com.gestao.oficinas_api.identidade.AuthProperties;
-import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail;
+import br.com.gestao.oficinas_api.identidade.ClientAddress;
+import br.com.gestao.oficinas_api.identidade.RateLimit;
 import br.com.gestao.oficinas_api.ordem.PhotoStorage;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -16,8 +17,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,22 +33,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/portal")
 public class PortalAccessController {
-    private static final Duration CHALLENGE_DURATION = Duration.ofMinutes(10);
     private static final Duration SESSION_DURATION = Duration.ofHours(24);
     private static final int MAX_ATTEMPTS = 5;
 
     private final JdbcTemplate jdbc;
-    private final TransactionalEmail email;
+    private final PortalChallengeIssuer issuer;
+    private final RateLimit limits;
+    private final ClientAddress addresses;
     private final AuthProperties auth;
     private final Clock clock;
     private final PhotoStorage storage;
     private final PortalAccessPolicy policy;
-    private final SecureRandom random = new SecureRandom();
 
-    public PortalAccessController(JdbcTemplate jdbc, TransactionalEmail email, AuthProperties auth,
-                                  Clock clock, PhotoStorage storage, PortalAccessPolicy policy) {
+    public PortalAccessController(JdbcTemplate jdbc, PortalChallengeIssuer issuer, AuthProperties auth,
+                                  Clock clock, PhotoStorage storage, PortalAccessPolicy policy,
+                                  RateLimit limits, ClientAddress addresses) {
         this.jdbc = jdbc;
-        this.email = email;
+        this.issuer = issuer;
+        this.limits = limits;
+        this.addresses = addresses;
         this.auth = auth;
         this.clock = clock;
         this.storage = storage;
@@ -57,63 +59,39 @@ public class PortalAccessController {
     }
 
     @PostMapping("/acesso/codigo")
-    public ResponseEntity<Map<String, Object>> requestCode(@RequestBody Request body) {
+    public ResponseEntity<Map<String, Object>> requestCode(@RequestBody Request body, HttpServletRequest request) {
         UUID publicId = UUID.randomUUID();
-        if (body.oficinaSlug() == null || body.placa() == null) {
-            return accepted(publicId);
-        }
-        String plate = normalizePlate(body.placa());
-        var targets = jdbc.query("""
-            SELECT c.id, c.email
-              FROM oficina o
-              JOIN veiculo v ON v.oficina_id=o.id
-              JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id
-                   AND l.veiculo_id=v.id AND l.fim_em IS NULL
-              JOIN cliente c ON c.oficina_id=l.oficina_id AND c.id=l.cliente_id
-             WHERE o.slug=? AND v.placa=? AND c.email_verificado_em IS NOT NULL AND c.ativo=true
-            """, (result, row) -> new Target(result.getObject(1, UUID.class), result.getString(2)),
-            body.oficinaSlug(), plate);
-        if (targets.isEmpty()) {
-            return accepted(publicId);
-        }
-
         try {
-            String value = "%06d".formatted(random.nextInt(1_000_000));
-            jdbc.update("""
-                INSERT INTO portal_desafio(id,oficina_id,cliente_id,placa,codigo_hash,expira_em)
-                SELECT ?,o.id,?,?,?,? FROM oficina o WHERE o.slug=?
-                """, publicId, targets.getFirst().id(), plate, hash(publicId, value),
-                Timestamp.from(clock.instant().plus(CHALLENGE_DURATION)), body.oficinaSlug());
-            email.send(targets.getFirst().email(), "Código de acesso · Gestão Oficinas",
-                "Seu código é: " + value + "\n\nVálido por 10 minutos.");
-        } catch (Exception ignored) {
-            // A resposta é deliberadamente idêntica para não revelar cadastros ou falhas de entrega.
+            issuer.issue(publicId, body, addresses.resolve(request));
+        } catch (RuntimeException ignored) {
+            // Keep delivery, account existence and throttling indistinguishable; never log provider data.
         }
         return accepted(publicId);
     }
 
     @PostMapping("/acesso/validacao")
     @Transactional(noRollbackFor = ApiException.class)
-    public ResponseEntity<Void> validateCode(@RequestBody Validate body, HttpSession session) {
+    public ResponseEntity<Void> validateCode(@RequestBody Validate body, HttpServletRequest request) {
+        limits.check("portal-validation:" + addresses.resolve(request), 60);
         if (body.desafioId() == null || body.codigo() == null || !body.codigo().matches("[0-9]{6}")) {
             throw invalidCode();
         }
         var challenges = jdbc.query("""
-            SELECT oficina_id,cliente_id,placa,codigo_hash,expira_em,tentativas,usado_em
+            SELECT oficina_id,cliente_id,placa,codigo_hash,expira_em,tentativas,usado_em,acesso_versao
               FROM portal_desafio WHERE id=? FOR UPDATE
             """, (result, row) -> new Challenge(
                 result.getObject(1, UUID.class), result.getObject(2, UUID.class), result.getString(3),
                 result.getString(4), result.getTimestamp(5).toInstant(), result.getInt(6),
-                instant(result.getTimestamp(7))), body.desafioId());
+                instant(result.getTimestamp(7)), result.getLong(8)), body.desafioId());
         if (challenges.isEmpty()) {
             throw invalidCode();
         }
 
         Challenge challenge = challenges.getFirst();
         boolean valid = policy.validChallenge(challenge.expires(), challenge.attempts(), challenge.used(),
-            challenge.hash(), hash(body.desafioId(), body.codigo()), clock.instant());
+            challenge.hash(), PortalCodeHash.hash(auth.codeSecret(), body.desafioId(), body.codigo()), clock.instant());
         if (valid) {
-            valid = hasCurrentVehicleLink(challenge.office(), challenge.customer(), challenge.plate());
+            valid = hasCurrentVehicleLink(challenge);
         }
         if (!valid) {
             jdbc.update("UPDATE portal_desafio SET tentativas=tentativas+1 WHERE id=? AND tentativas<?",
@@ -122,15 +100,20 @@ public class PortalAccessController {
         }
 
         jdbc.update("UPDATE portal_desafio SET usado_em=? WHERE id=?", Timestamp.from(clock.instant()), body.desafioId());
+        HttpSession session = request.getSession();
+        request.changeSessionId();
         session.setAttribute("PORTAL_CLIENTE",
-            new Grant(challenge.office(), challenge.customer(), null, null, clock.instant()));
+            new Grant(challenge.office(), challenge.customer(), null, null, clock.instant(), challenge.version()));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/acesso/link")
     @Transactional
-    public ResponseEntity<Void> consumeLink(@RequestBody Link body, HttpSession session) {
-        if (body.token() == null || body.token().length() < 40) {
+    public ResponseEntity<Void> consumeLink(@RequestBody Link body, HttpServletRequest request) {
+        HttpSession session = request.getSession();
+        session.removeAttribute("PORTAL_CLIENTE");
+        limits.check("portal-link:" + addresses.resolve(request), 60);
+        if (body.token() == null || body.token().length() < 40 || body.token().length() > 100) {
             throw invalidLink();
         }
         String digest = sha(body.token());
@@ -149,8 +132,9 @@ public class PortalAccessController {
             throw invalidLink();
         }
         jdbc.update("UPDATE portal_link_os SET usado_em=? WHERE id=?", Timestamp.from(clock.instant()), link.id());
+        request.changeSessionId();
         session.setAttribute("PORTAL_CLIENTE",
-            new Grant(link.office(), null, link.order(), link.id(), clock.instant()));
+            new Grant(link.office(), null, link.order(), link.id(), clock.instant(), null));
         return ResponseEntity.noContent().build();
     }
 
@@ -283,7 +267,7 @@ public class PortalAccessController {
         if (grant.linkId() != null && !currentLinkIsValid(grant)) {
             expire(session);
         }
-        if (grant.customer() != null && !activeCustomer(grant.office(), grant.customer())) {
+        if (grant.customer() != null && !activeCustomer(grant)) {
             expire(session);
         }
         return grant;
@@ -320,23 +304,23 @@ public class PortalAccessController {
             .stream().findFirst().orElseThrow(this::serviceNotFound);
     }
 
-    private boolean hasCurrentVehicleLink(UUID office, UUID customer, String plate) {
+    private boolean hasCurrentVehicleLink(Challenge challenge) {
         Integer count = jdbc.queryForObject("""
             SELECT count(*) FROM cliente c
               JOIN vinculo_cliente_veiculo l ON l.oficina_id=c.oficina_id
                    AND l.cliente_id=c.id AND l.fim_em IS NULL
               JOIN veiculo v ON v.oficina_id=l.oficina_id AND v.id=l.veiculo_id
              WHERE c.oficina_id=? AND c.id=? AND c.ativo=true
-               AND c.email_verificado_em IS NOT NULL AND v.placa=?
-            """, Integer.class, office, customer, plate);
+               AND c.email_verificado_em IS NOT NULL AND v.placa=? AND c.acesso_versao=?
+            """, Integer.class, challenge.office(), challenge.customer(), challenge.plate(), challenge.version());
         return count != null && count > 0;
     }
 
-    private boolean activeCustomer(UUID office, UUID customer) {
+    private boolean activeCustomer(Grant grant) {
         Integer count = jdbc.queryForObject("""
             SELECT count(*) FROM cliente
-             WHERE oficina_id=? AND id=? AND ativo=true AND email_verificado_em IS NOT NULL
-            """, Integer.class, office, customer);
+             WHERE oficina_id=? AND id=? AND ativo=true AND email_verificado_em IS NOT NULL AND acesso_versao=?
+            """, Integer.class, grant.office(), grant.customer(), grant.version());
         return count != null && count > 0;
     }
 
@@ -365,22 +349,12 @@ public class PortalAccessController {
     }
 
     private void expire(HttpSession session) {
-        session.invalidate();
+        session.removeAttribute("PORTAL_CLIENTE");
         throw new ApiException(401, "ACESSO_EXPIRADO", "Acesse novamente.");
     }
 
     private ResponseEntity<Map<String, Object>> accepted(UUID challengeId) {
         return ResponseEntity.accepted().body(Map.of("desafioId", challengeId));
-    }
-
-    private String hash(UUID id, String code) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(auth.codeSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return HexFormat.of().formatHex(mac.doFinal((id + ":" + code).getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception exception) {
-            throw new IllegalStateException(exception);
-        }
     }
 
     private String sha(String value) {
@@ -390,10 +364,6 @@ public class PortalAccessController {
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
         }
-    }
-
-    private String normalizePlate(String value) {
-        return value.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
     }
 
     private Instant instant(Timestamp value) {
@@ -433,12 +403,11 @@ public class PortalAccessController {
     public record PublicUpdate(UUID id, String tipo, String statusAnterior, String statusNovo,
                                String texto, Instant createdAt) {}
     public record PublicPhotoView(UUID id, String etapa, String legenda, Instant createdAt) {}
-    private record Target(UUID id, String email) {}
     private record Challenge(UUID office, UUID customer, String plate, String hash, Instant expires,
-                             int attempts, Instant used) {}
+                             int attempts, Instant used, long version) {}
     private record LinkGrant(UUID id, UUID office, UUID order, Instant expires, Instant revoked) {}
     private record LinkState(Instant expires, Instant revoked) {}
     private record PublicPhoto(String thumb, String key, String type) {}
-    record Grant(UUID office, UUID customer, UUID order, UUID linkId, Instant createdAt)
+    record Grant(UUID office, UUID customer, UUID order, UUID linkId, Instant createdAt, Long version)
         implements java.io.Serializable {}
 }

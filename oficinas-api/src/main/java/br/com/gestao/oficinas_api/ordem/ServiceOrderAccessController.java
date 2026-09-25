@@ -60,6 +60,7 @@ public class ServiceOrderAccessController {
             INSERT INTO portal_link_os(id,oficina_id,ordem_servico_id,token_hash,expira_em,criado_por)
             VALUES (?,?,?,?,?,?)
             """, UUID.randomUUID(), owner.oficinaId(), orderId, sha(token), Timestamp.from(expires), owner.id());
+        audit(owner, orderId, "LINK_OPERACIONAL_EMITIDO");
         return new Link(token, expires);
     }
 
@@ -73,7 +74,15 @@ public class ServiceOrderAccessController {
             UPDATE portal_link_os SET revogado_em=?
              WHERE oficina_id=? AND ordem_servico_id=? AND revogado_em IS NULL
             """, Timestamp.from(clock.instant()), owner.oficinaId(), orderId);
+        audit(owner, orderId, "LINK_OPERACIONAL_REVOGADO");
         return ResponseEntity.noContent().build();
+    }
+
+    private void audit(Identidade owner, UUID orderId, String action) {
+        jdbc.update("""
+            INSERT INTO cadastro_auditoria(id,oficina_id,proprietario_id,recurso,recurso_id,acao)
+            VALUES (?,?,?,'ORDEM_SERVICO',?,?)
+            """, UUID.randomUUID(), owner.oficinaId(), owner.id(), orderId, action);
     }
 
     private void lockOrder(Identidade owner, UUID orderId) {

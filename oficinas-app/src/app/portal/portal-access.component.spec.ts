@@ -26,6 +26,24 @@ describe('PortalAccessComponent', () => {
 
   afterEach(() => http.verify());
 
+  it('troca token explicitamente vazio sem restaurar autorização antiga', async () => {
+    TestBed.inject(ActivatedRoute).snapshot.fragment = 'token=';
+    Object.defineProperty(TestBed.inject(ActivatedRoute).snapshot, 'queryParamMap', {
+      value: convertToParamMap({ token: 'must-not-be-used' })
+    });
+    const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
+    const operation = component.ngOnInit();
+    await tickRequests();
+    http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
+    await tickRequests();
+    const exchange = http.expectOne('/api/portal/acesso/link');
+    expect(exchange.request.body).toEqual({ token: '' });
+    exchange.flush({}, { status: 400, statusText: 'Bad Request' });
+    await operation;
+    http.expectNone('/api/portal/veiculos');
+    expect(component.authenticated()).toBeFalse();
+  });
+
   for (const legacy of [false, true]) {
     it(`troca token ${legacy ? 'legado' : 'do fragmento'} removendo-o antes da chamada`, async () => {
       TestBed.inject(ActivatedRoute).snapshot.fragment = legacy ? null : 'token=synthetic-token';

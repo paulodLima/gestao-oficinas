@@ -6,6 +6,20 @@ import { CustomerVehicleService } from './customer-vehicle.service';
 describe('CustomerVehicleService — consultas individuais', () => {
   beforeEach(() => TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] }));
   afterEach(() => TestBed.inject(HttpTestingController).verify());
+  it('pesquisa CPF no corpo protegido por CSRF, nunca na URL', async () => {
+    const result = TestBed.inject(CustomerVehicleService).customers('529.982.247-25');
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/auth/csrf').flush({ token: 'csrf-safe', headerName: 'X-CSRF-TOKEN' });
+    await Promise.resolve();
+    await Promise.resolve();
+    const request = http.expectOne('/api/clientes/pesquisa');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.urlWithParams).not.toContain('529');
+    expect(request.request.headers.get('X-CSRF-TOKEN')).toBe('csrf-safe');
+    expect(request.request.body).toEqual({ q: '529.982.247-25', page: 0, size: 100 });
+    request.flush({ items: [], totalElements: 0 });
+    await result;
+  });
   it('consulta veículo pelo ID sem depender da paginação', async () => {
     const result = TestBed.inject(CustomerVehicleService).vehicle('vehicle-id');
     const request = TestBed.inject(HttpTestingController).expectOne('/api/veiculos/vehicle-id');

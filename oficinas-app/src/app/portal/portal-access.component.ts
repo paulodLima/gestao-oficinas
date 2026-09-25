@@ -189,12 +189,12 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
     this.navigation = this.router.events.subscribe(event => {
       if (!(event instanceof NavigationEnd) && !(event instanceof NavigationSkipped)) return;
       const url = new URL(this.location.path(true), 'https://portal.invalid');
-      const token = new URLSearchParams(url.hash.slice(1)).get('token') || url.searchParams.get('token');
-      if (token) void this.consumeLink(token);
+      const token = new URLSearchParams(url.hash.slice(1)).get('token') ?? url.searchParams.get('token');
+      if (token !== null) void this.consumeLink(token);
     });
     const fragment = new URLSearchParams(this.route.snapshot.fragment ?? '');
-    const token = fragment.get('token') || this.route.snapshot.queryParamMap.get('token');
-    if (!token) { await this.restoreSession(); return; }
+    const token = fragment.get('token') ?? this.route.snapshot.queryParamMap.get('token');
+    if (token === null) { await this.restoreSession(); return; }
     await this.consumeLink(token);
   }
 

@@ -2,6 +2,7 @@ package br.com.gestao.oficinas_api.adicional;
 
 import br.com.gestao.oficinas_api.identidade.ApiException;
 import br.com.gestao.oficinas_api.identidade.AuthProperties;
+import br.com.gestao.oficinas_api.identidade.RateLimit;
 import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail;
 import br.com.gestao.oficinas_api.notificacoes.NotificationService;
 import br.com.gestao.oficinas_api.notificacoes.NotificationEvent;
@@ -38,16 +39,18 @@ public class AdditionalDecisionService {
     private final AdditionalDecisionPolicy policy;
     private final Clock clock;
     private final NotificationService notifications;
+    private final RateLimit limits;
     private final SecureRandom random = new SecureRandom();
 
     public AdditionalDecisionService(JdbcTemplate jdbc, TransactionalEmail email, AuthProperties auth,
-                                     AdditionalDecisionPolicy policy, Clock clock, NotificationService notifications) {
+                                     AdditionalDecisionPolicy policy, Clock clock, NotificationService notifications, RateLimit limits) {
         this.jdbc = jdbc;
         this.email = email;
         this.auth = auth;
         this.policy = policy;
         this.clock = clock;
         this.notifications = notifications;
+        this.limits = limits;
     }
 
     public List<PublicRequest> list(UUID shop, UUID customer, UUID order) {
@@ -73,14 +76,16 @@ public class AdditionalDecisionService {
         if (!Set.of("ENVIADA", "PARCIALMENTE_DECIDIDA").contains(current.state())) {
             throw conflict("Esta solicitação não aceita novas decisões.");
         }
-        Contact contact = jdbc.query("""
-            SELECT email,email_verificado_em FROM cliente
-             WHERE oficina_id=? AND id=? AND ativo=true
-            """, (result, row) -> new Contact(result.getString(1), instant(result.getTimestamp(2))),
-            shop, customer).stream().findFirst().orElseThrow(this::accessDenied);
+        Contact contact = lockContact(shop, customer);
         if (contact.verifiedAt() == null || contact.email() == null || contact.email().isBlank()) {
             throw new ApiException(409, "EMAIL_NAO_VERIFICADO",
                 "Confirme um e-mail com a oficina antes de decidir os adicionais.");
+        }
+        limits.check("additional-issue-contact:" + contact.email(), 5);
+        if (jdbc.queryForObject("""
+            SELECT count(*) FROM adicional_desafio WHERE oficina_id=? AND cliente_id=? AND created_at>?
+            """, Integer.class, shop, customer, Timestamp.from(clock.instant().minusSeconds(60))) > 0) {
+            throw new ApiException(429, "REENVIO_ANTECIPADO", "Aguarde um minuto antes de solicitar outro código.");
         }
         jdbc.update("""
             UPDATE adicional_desafio SET usado_em=now()
@@ -91,10 +96,10 @@ public class AdditionalDecisionService {
         Instant expires = clock.instant().plus(CHALLENGE_DURATION);
         jdbc.update("""
             INSERT INTO adicional_desafio(id,oficina_id,cliente_id,ordem_servico_id,solicitacao_id,
-              versao_id,versao_solicitacao,codigo_hash,expira_em)
-            VALUES (?,?,?,?,?,?,?,?,?)
+              versao_id,versao_solicitacao,codigo_hash,expira_em,acesso_versao)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
             """, challengeId, shop, customer, order, requestId, current.versionId(),
-            current.requestVersion(), hash(challengeId, code), Timestamp.from(expires));
+            current.requestVersion(), hash(challengeId, code), Timestamp.from(expires), contact.version());
         email.send(contact.email(), "Código para decidir adicionais · Gestão Oficinas",
             "Seu código é: " + code + "\n\nVálido por 10 minutos e somente para esta solicitação.");
         return new ChallengeIssued(challengeId, expires);
@@ -124,10 +129,12 @@ public class AdditionalDecisionService {
             throw conflict("A solicitação foi alterada. Atualize a página antes de decidir.");
         }
         Challenge challenge = challenge(input.desafioId());
+        Contact contact = lockContact(shop, customer);
         boolean valid = challenge.shop().equals(shop) && challenge.customer().equals(customer)
             && challenge.order().equals(order) && challenge.request().equals(requestId)
             && challenge.versionId().equals(current.versionId())
             && challenge.requestVersion() == current.requestVersion()
+            && contact.verifiedAt() != null && challenge.accessVersion() == contact.version()
             && policy.validChallenge(challenge.expires(), challenge.attempts(), challenge.used(),
                 challenge.hash(), hash(input.desafioId(), input.codigo()), clock.instant());
         if (!valid) {
@@ -271,14 +278,22 @@ public class AdditionalDecisionService {
     private Challenge challenge(UUID id) {
         return jdbc.query("""
             SELECT oficina_id,cliente_id,ordem_servico_id,solicitacao_id,versao_id,
-                   versao_solicitacao,codigo_hash,expira_em,tentativas,usado_em
+                   versao_solicitacao,codigo_hash,expira_em,tentativas,usado_em,acesso_versao
               FROM adicional_desafio WHERE id=? FOR UPDATE
             """, (result, row) -> new Challenge(result.getObject(1, UUID.class),
                 result.getObject(2, UUID.class), result.getObject(3, UUID.class),
                 result.getObject(4, UUID.class), result.getObject(5, UUID.class), result.getLong(6),
                 result.getString(7), result.getTimestamp(8).toInstant(), result.getInt(9),
-                instant(result.getTimestamp(10))), id).stream().findFirst()
+                instant(result.getTimestamp(10)), result.getLong(11)), id).stream().findFirst()
             .orElseThrow(() -> new ApiException(400, "CODIGO_INVALIDO", "Código inválido ou expirado."));
+    }
+
+    private Contact lockContact(UUID shop, UUID customer) {
+        return jdbc.query("""
+            SELECT email,email_verificado_em,acesso_versao FROM cliente
+             WHERE oficina_id=? AND id=? AND ativo=true FOR UPDATE
+            """, (result, row) -> new Contact(result.getString(1), instant(result.getTimestamp(2)), result.getLong(3)),
+            shop, customer).stream().findFirst().orElseThrow(this::accessDenied);
     }
 
     private void lockOrder(UUID shop, UUID order) {
@@ -351,11 +366,11 @@ public class AdditionalDecisionService {
                               List<PublicItem> itens, String decisao, Instant decididaEm) {}
     public record PublicItem(UUID id, String tipo, String descricao, BigDecimal quantidade,
                              BigDecimal valorUnitario, BigDecimal total) {}
-    private record Contact(String email, Instant verifiedAt) {}
+    private record Contact(String email, Instant verifiedAt, long version) {}
     private record Current(String state, long requestVersion, UUID versionId,
                            Instant createdAt, Instant updatedAt) {}
     private record Challenge(UUID shop, UUID customer, UUID order, UUID request, UUID versionId,
-                             long requestVersion, String hash, Instant expires, int attempts, Instant used) {}
+                             long requestVersion, String hash, Instant expires, int attempts, Instant used, long accessVersion) {}
     private record ItemRow(UUID id, String type, String description, BigDecimal quantity,
                            BigDecimal unitValue, BigDecimal total, String group, int order) {}
     private record DecisionRow(String decision, Instant at) {}

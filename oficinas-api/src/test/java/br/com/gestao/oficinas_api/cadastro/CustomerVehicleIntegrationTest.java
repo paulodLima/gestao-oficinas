@@ -77,7 +77,11 @@ class CustomerVehicleIntegrationTest {
         var result = mapper.readTree(browser.get("/api/veiculos?q=Ana&size=100").body());
         assertEquals(2, result.get("totalElements").asInt());
         assertEquals(client.get("id").asText(), result.get("items").get(0).get("clienteId").asText());
-        assertEquals(1, mapper.readTree(browser.get("/api/clientes?q=529.982.247-25").body()).get("totalElements").asInt());
+        assertEquals(1, mapper.readTree(browser.send("POST", "/api/clientes/pesquisa",
+            Map.of("q", "529.982.247-25", "page", 0, "size", 20)).body()).get("totalElements").asInt());
+        assertEquals(0, mapper.readTree(browser.send("POST", "/api/clientes/pesquisa",
+            Map.of("q", "Inexistente", "page", 0, "size", 20)).body()).get("totalElements").asInt());
+        assertEquals(400, browser.get("/api/clientes?q=529.982.247-25").statusCode());
         assertEquals(1, mapper.readTree(browser.get("/api/veiculos?q=BRA-1E23").body()).get("totalElements").asInt());
         assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM vinculo_cliente_veiculo WHERE cliente_id=? AND fim_em IS NULL", Integer.class, UUID.fromString(client.get("id").asText())));
     }

@@ -180,6 +180,7 @@ Erro application/problem+json: {type:"about:blank",title:"Conflito",status:409,c
 | GET/PATCH /oficina | dados/horário/fuso; PATCH campos permitidos |
 | PUT /oficina/logo | multipart imagem validada → referência da logo |
 | POST/GET /clientes; GET/PATCH /clientes/{id} | nome,cpf,telefone,email; consulta paginada |
+| POST /clientes/pesquisa | q,page,size no corpo com CSRF; CPF não é transportado na URL. GET /clientes mantém listagem sem q não vazio |
 | POST /clientes/{id}/verificacao; POST /clientes/{id}/verificacao/confirmacao | emissão; desafioId,codigo |
 | POST/GET /veiculos; GET/PATCH /veiculos/{id} | placa,marca,modelo,ano,cor,clienteId |
 | POST /veiculos/{id}/transferencias | novoClienteId,expectedVersion; sem OS ativa |
