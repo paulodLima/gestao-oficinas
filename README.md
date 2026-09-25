@@ -301,6 +301,22 @@ O backend só é iniciado depois que o healthcheck do PostgreSQL confirma que o 
 
 ## Solução de problemas
 
+### Compartilhar acompanhamento pelo WhatsApp
+
+No detalhe da OS, use **Preparar link seguro**, confira a mensagem e escolha
+**Abrir WhatsApp**. Selecione o destinatário e confirme o envio no WhatsApp.
+O sistema não envia automaticamente nem confirma entrega. **Copiar link** e o
+campo selecionável permitem compartilhar manualmente por outro canal.
+
+O link permite leitura apenas daquela OS por até sete dias ou até seu encerramento.
+Compartilhe somente com o responsável: quem possui o link pode consultar o serviço.
+**Gerar outro link** invalida os anteriores; **Revogar links desta OS** encerra o
+acesso mesmo após recarregar a página. Aprovar adicionais continua exigindo código.
+No ambiente local, `localhost` funciona somente no próprio computador; para o
+cliente acessar, use o endereço HTTPS público do sistema em uma implantação configurada.
+
+Documentação e testes: [tarefa 16](tasks/prd-compartilhamento-whatsapp/16_task.md).
+
 ### Docker não está disponível
 
 Confirme que o Docker Desktop está aberto e que o mecanismo de contêineres Linux está em execução.

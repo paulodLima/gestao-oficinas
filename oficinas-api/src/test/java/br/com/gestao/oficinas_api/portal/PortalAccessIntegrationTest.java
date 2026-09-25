@@ -8,6 +8,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -148,6 +152,13 @@ class PortalAccessIntegrationTest {
         assertEquals(200, created.statusCode(), created.body());
         JsonNode link = mapper.readTree(created.body());
         assertEquals(43, link.get("token").asText().length());
+        assertTrue(Duration.between(Instant.now(), Instant.parse(link.get("expiraEm").asText())).toSeconds()
+            > Duration.ofDays(7).minusMinutes(1).toSeconds());
+        assertFalse(created.body().contains("52998224725"));
+        assertNotEquals(link.get("token").asText(), jdbc.queryForObject(
+            "SELECT token_hash FROM portal_link_os WHERE ordem_servico_id=?", String.class, fixture.orderId()));
+        assertEquals(404, outsider.owner().send("POST",
+            "/api/ordens-servico/" + fixture.orderId() + "/acesso", Map.of()).statusCode());
         assertEquals(404, outsider.owner().send("DELETE",
             "/api/ordens-servico/" + fixture.orderId() + "/acesso", Map.of()).statusCode());
 
@@ -156,6 +167,8 @@ class PortalAccessIntegrationTest {
             Map.of("token", link.get("token").asText())).statusCode());
         assertEquals(fixture.orderId().toString(), mapper.readTree(visitor.get("/api/portal/servico-atual").body())
             .get("servico").get("id").asText());
+        assertEquals(404, visitor.get("/api/portal/ordens-servico/" + outsider.orderId() + "/atualizacoes").statusCode());
+        assertTrue(mapper.readTree(visitor.get("/api/portal/veiculos").body()).isEmpty());
         assertEquals(401, visitor.send("POST", "/api/ordens-servico/" + fixture.orderId() + "/status",
             Map.of("status", "EM_DIAGNOSTICO", "expectedVersion", 0)).statusCode());
 
@@ -165,10 +178,65 @@ class PortalAccessIntegrationTest {
 
         JsonNode expiring = mapper.readTree(fixture.owner().send("POST",
             "/api/ordens-servico/" + fixture.orderId() + "/acesso", Map.of()).body());
+        Browser expiringSession = new Browser();
+        assertEquals(204, expiringSession.send("POST", "/api/portal/acesso/link",
+            Map.of("token", expiring.get("token").asText())).statusCode());
         jdbc.update("UPDATE portal_link_os SET expira_em=now()-interval '1 second' WHERE oficina_id=? AND ordem_servico_id=? AND revogado_em IS NULL",
             fixture.shopId(), fixture.orderId());
         assertEquals(400, new Browser().send("POST", "/api/portal/acesso/link",
             Map.of("token", expiring.get("token").asText())).statusCode());
+        assertEquals(401, expiringSession.get("/api/portal/servico-atual").statusCode());
+    }
+
+    @Test
+    void reissueInvalidatesOldLinkAndSessionAndClosureStopsSharing() throws Exception {
+        Fixture fixture = fixture("REN1A23", "52998224725");
+        String path = "/api/ordens-servico/" + fixture.orderId() + "/acesso";
+        String firstToken = mapper.readTree(fixture.owner().send("POST", path, Map.of()).body()).get("token").asText();
+        Browser previous = new Browser();
+        assertEquals(204, previous.send("POST", "/api/portal/acesso/link", Map.of("token", firstToken)).statusCode());
+        String nextToken = mapper.readTree(fixture.owner().send("POST", path, Map.of()).body()).get("token").asText();
+        assertNotEquals(firstToken, nextToken);
+        assertEquals(401, previous.get("/api/portal/servico-atual").statusCode());
+        assertEquals(400, new Browser().send("POST", "/api/portal/acesso/link", Map.of("token", firstToken)).statusCode());
+        Browser current = new Browser();
+        assertEquals(204, current.send("POST", "/api/portal/acesso/link", Map.of("token", nextToken)).statusCode());
+        jdbc.update("UPDATE ordem_servico SET status='ENTREGUE',encerrada_em=now() WHERE id=?", fixture.orderId());
+        assertEquals(401, current.get("/api/portal/servico-atual").statusCode());
+        assertEquals(400, new Browser().send("POST", "/api/portal/acesso/link", Map.of("token", nextToken)).statusCode());
+        assertEquals(409, fixture.owner().send("POST", path, Map.of()).statusCode());
+        assertEquals(204, fixture.owner().send("DELETE", path, Map.of()).statusCode());
+    }
+
+    @Test
+    void probingPortalWithoutGrantDoesNotInvalidateOwnerSession() throws Exception {
+        Fixture fixture = fixture("PRO1A23", "52998224725");
+        assertEquals(401, fixture.owner().get("/api/portal/veiculos").statusCode());
+        assertEquals(200, fixture.owner().get("/api/auth/me").statusCode());
+    }
+
+    @Test
+    void concurrentIssuanceLeavesOnlyOneLiveLink() throws Exception {
+        Fixture fixture = fixture("CON1A23", "52998224725");
+        String path = "/api/ordens-servico/" + fixture.orderId() + "/acesso";
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<HttpResponse<String>> issue = () -> {
+                ready.countDown();
+                assertTrue(start.await(10, TimeUnit.SECONDS));
+                return fixture.owner().send("POST", path, Map.of());
+            };
+            var first = executor.submit(issue);
+            var second = executor.submit(issue);
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            assertEquals(200, first.get(20, TimeUnit.SECONDS).statusCode());
+            assertEquals(200, second.get(20, TimeUnit.SECONDS).statusCode());
+        }
+        assertEquals(1, jdbc.queryForObject("""
+            SELECT count(*) FROM portal_link_os WHERE ordem_servico_id=? AND revogado_em IS NULL
+            """, Integer.class, fixture.orderId()));
     }
 
     @Test

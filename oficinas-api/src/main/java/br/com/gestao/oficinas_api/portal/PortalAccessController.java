@@ -274,7 +274,7 @@ public class PortalAccessController {
     private Grant grant(HttpSession session) {
         Object stored = session.getAttribute("PORTAL_CLIENTE");
         if (!(stored instanceof Grant)) {
-            expire(session);
+            throw new ApiException(401, "NAO_AUTENTICADO", "Acesse novamente.");
         }
         Grant grant = (Grant) stored;
         if (policy.expiredSession(grant.createdAt(), clock.instant(), SESSION_DURATION)) {
