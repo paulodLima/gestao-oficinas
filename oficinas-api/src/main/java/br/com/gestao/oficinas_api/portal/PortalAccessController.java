@@ -289,7 +289,7 @@ public class PortalAccessController {
         return grant;
     }
 
-    private Grant authorize(HttpSession session, UUID order) {
+    Grant authorize(HttpSession session, UUID order) {
         Grant grant = grant(session);
         if (grant.order() != null) {
             if (grant.order().equals(order)) {
@@ -307,6 +307,17 @@ public class PortalAccessController {
             throw serviceNotFound();
         }
         return grant;
+    }
+
+    UUID responsibleCustomer(Grant grant, UUID order) {
+        if (grant.customer() != null) return grant.customer();
+        return jdbc.query("""
+            SELECT os.cliente_id FROM ordem_servico os JOIN cliente c
+              ON c.oficina_id=os.oficina_id AND c.id=os.cliente_id
+             WHERE os.oficina_id=? AND os.id=? AND os.encerrada_em IS NULL
+               AND c.ativo=true
+            """, (result, row) -> result.getObject(1, UUID.class), grant.office(), order)
+            .stream().findFirst().orElseThrow(this::serviceNotFound);
     }
 
     private boolean hasCurrentVehicleLink(UUID office, UUID customer, String plate) {
@@ -428,6 +439,6 @@ public class PortalAccessController {
     private record LinkGrant(UUID id, UUID office, UUID order, Instant expires, Instant revoked) {}
     private record LinkState(Instant expires, Instant revoked) {}
     private record PublicPhoto(String thumb, String key, String type) {}
-    private record Grant(UUID office, UUID customer, UUID order, UUID linkId, Instant createdAt)
+    record Grant(UUID office, UUID customer, UUID order, UUID linkId, Instant createdAt)
         implements java.io.Serializable {}
 }

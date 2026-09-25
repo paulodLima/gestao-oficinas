@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { AdditionalDecisionComponent } from './additional-decision.component';
 
 interface PortalVehicle { id: string; placa: string; veiculo: string; }
 interface PortalOffice { nome: string; telefone: string; email: string; }
@@ -19,7 +20,7 @@ interface PortalUpdate {
 
 @Component({
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, AdditionalDecisionComponent],
   template: `
     <main class="portal-shell">
       <header class="portal-brand">
@@ -80,6 +81,8 @@ interface PortalUpdate {
               </div>
             }
           </section>
+
+          <app-additional-decision [orderId]="current.id" />
 
           <section class="gallery" aria-labelledby="gallery-title">
             <div class="section-title"><div><p class="eyebrow">REGISTROS DA OFICINA</p><h2 id="gallery-title">Galeria do serviço</h2></div><span>{{ filteredPhotos().length }} de {{ photos().length }}</span></div>
