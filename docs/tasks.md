@@ -2,7 +2,7 @@
 
 Fonte funcional: [prompt.md](prompt.md).
 
-Status: tarefas 1.0–4.0 concluídas; tarefas 5–20 pendentes. Os 20 IDs preservam os cards existentes. Evidências nas validações versionadas em `docs/task-*-validacao.md`.
+Os 20 IDs preservam os cards existentes. Consulte os detalhes de execução de cada tarefa e as evidências versionadas em `docs/task-*-validacao.md` e `tasks/prd-*/validacao.md`.
 
 ## Premissas e decisões pendentes
 
@@ -36,7 +36,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
 - [ ] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
 - [ ] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
-- [ ] 16.0 Compartilhamento manual pelo WhatsApp — [Trello](https://trello.com/c/rHAC9p6Z)
+- [x] 16.0 Compartilhamento manual pelo WhatsApp — [Trello](https://trello.com/c/rHAC9p6Z)
 - [ ] 17.0 Encerramento, cancelamento e retorno do veículo — [Trello](https://trello.com/c/5A1vsurk)
 - [ ] 18.0 Resumo de entrega e avaliação — [Trello](https://trello.com/c/8ZDp53o3)
 - [ ] 19.0 Auditoria e testes de autorização — [Trello](https://trello.com/c/g2RG0IJA)
@@ -650,10 +650,10 @@ Botão com mensagem e link seguro para acompanhamento da OS.
 
 ## Subtarefas
 
-- [ ] 16.1 Gerar mensagem com link de acompanhamento autorizado sem CPF.
-- [ ] 16.2 Criar botão para abrir WhatsApp/compartilhar e alternativa de copiar link.
-- [ ] 16.3 Identificar envio manual sem registrar entrega como confirmada.
-- [ ] 16.4 Testes unitários: composição e codificação da mensagem; integração: escopo/expiração do link; E2E: abertura e cópia no celular/desktop.
+- [x] 16.1 Gerar mensagem com link de acompanhamento autorizado sem CPF.
+- [x] 16.2 Criar botão para abrir WhatsApp/compartilhar e alternativa de copiar link.
+- [x] 16.3 Identificar envio manual sem registrar entrega como confirmada.
+- [x] 16.4 Testes unitários: composição e codificação da mensagem; integração: escopo/expiração do link; E2E: abertura e cópia no celular/desktop.
 
 ## Critérios de aceite
 
@@ -664,9 +664,9 @@ Botão com mensagem e link seguro para acompanhamento da OS.
 
 ## Entrega e validação
 
-Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
+Implementação e testes concluídos: 94 Java, 67 Angular, 18 E2E desktop/mobile e build aprovados. Compartilhamento manual com cópia/fallback, fragmento sem query, navegação entre links na mesma aba, revogação e emissão serializada por OS.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Evidências e revisão: `tasks/prd-compartilhamento-whatsapp/validacao.md` e `16_task_review.md`. Sem disparos reais ou integração automática com WhatsApp.
 
 ---
 

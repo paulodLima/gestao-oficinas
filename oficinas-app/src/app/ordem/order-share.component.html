@@ -1,0 +1,28 @@
+<section aria-labelledby="share-title">
+  <p class="eyebrow">ACESSO DO CLIENTE · ENVIO MANUAL</p>
+  <h3 id="share-title">Compartilhar acompanhamento</h3>
+  <p class="hint">Somente leitura desta OS. O link vale por até 7 dias ou até o encerramento. Gerar outro link invalida os anteriores.</p>
+  @if (active) {
+    <button type="button" class="prepare" [disabled]="busy()" (click)="prepare()">{{ busy() ? 'Aguarde…' : url() ? 'Gerar outro link' : 'Preparar link seguro' }}</button>
+    @if (url()) {
+      <div class="preview">
+        <p class="eyebrow">MENSAGEM QUE SERÁ PREPARADA</p>
+        <p class="message">{{ message() }}</p>
+      </div>
+      <label for="share-url">Link para copiar manualmente</label>
+      <input id="share-url" #linkField [value]="url()" readonly (focus)="linkField.select()" autocomplete="off" spellcheck="false">
+      <p class="hint">Expira em {{ formatExpiry() }} (horário de Brasília), ou antes se a OS for encerrada ou o acesso revogado.</p>
+      <div class="actions">
+        <a [href]="destination()" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
+          [attr.aria-disabled]="busy()" (click)="openWhatsApp($event)">Abrir WhatsApp <span aria-hidden="true">↗</span></a>
+        <button type="button" [disabled]="busy()" (click)="copy()">Copiar link</button>
+      </div>
+    }
+  } @else {
+    <p class="hint">OS encerrada: não é possível gerar nem compartilhar links de acompanhamento.</p>
+  }
+  <p class="privacy"><strong>Você confirma o envio.</strong> Escolha o destinatário no WhatsApp. Não há disparo automático nem confirmação de entrega. Quem tiver o link poderá consultar esta OS; compartilhe apenas com o cliente responsável.</p>
+  <button type="button" class="revoke" [disabled]="busy()" (click)="revoke()">Revogar links desta OS</button>
+  @if (notice()) { <p role="status" class="notice">{{ notice() }}</p> }
+  @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+</section>

@@ -1,18 +1,23 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, convertToParamMap } from '@angular/router';
+import { Subject } from 'rxjs';
 import { PortalAccessComponent } from './portal-access.component';
+import { Location } from '@angular/common';
 
 describe('PortalAccessComponent', () => {
   let http: HttpTestingController;
+  let navigation: Subject<NavigationEnd>;
 
   beforeEach(async () => {
+    navigation = new Subject<NavigationEnd>();
     await TestBed.configureTestingModule({
       imports: [PortalAccessComponent],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        { provide: Router, useValue: { events: navigation } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } }
       ]
     }).compileComponents();
@@ -20,6 +25,101 @@ describe('PortalAccessComponent', () => {
   });
 
   afterEach(() => http.verify());
+
+  for (const legacy of [false, true]) {
+    it(`troca token ${legacy ? 'legado' : 'do fragmento'} removendo-o antes da chamada`, async () => {
+      TestBed.inject(ActivatedRoute).snapshot.fragment = legacy ? null : 'token=synthetic-token';
+      Object.defineProperty(TestBed.inject(ActivatedRoute).snapshot, 'queryParamMap', {
+        value: convertToParamMap(legacy ? { token: 'synthetic-token' } : {})
+      });
+      const clean = spyOn(TestBed.inject(Location), 'replaceState');
+      const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
+      const operation = component.ngOnInit();
+      expect(clean).toHaveBeenCalledWith('/acompanhar');
+      await tickRequests();
+      http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
+      await tickRequests();
+      const exchange = http.expectOne('/api/portal/acesso/link');
+      expect(exchange.request.body).toEqual({ token: 'synthetic-token' });
+      exchange.flush({ detail: 'expired' }, { status: 400, statusText: 'Bad Request' });
+      await operation;
+      expect(component.authenticated()).toBeFalse();
+      expect(component.message()).toContain('expirou ou foi revogado');
+    });
+  }
+
+  it('restaura sessão HTTP sem guardar ou reenviar token', async () => {
+    const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
+    const operation = component.ngOnInit();
+    http.expectOne('/api/portal/veiculos').flush([]);
+    await tickRequests();
+    http.expectOne('/api/portal/servico-atual').flush({ oficina: { nome: 'Oficina' }, servico: null });
+    await operation;
+    expect(component.authenticated()).toBeTrue();
+    expect(component.office()?.nome).toBe('Oficina');
+  });
+
+  it('mantém formulário de acesso para visitante sem sessão', async () => {
+    const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
+    const operation = component.ngOnInit();
+    http.expectOne('/api/portal/veiculos').flush({}, { status: 401, statusText: 'Unauthorized' });
+    await operation;
+    expect(component.authenticated()).toBeFalse();
+    expect(component.message()).toBe('');
+  });
+
+  it('descarta carga atrasada anterior ao receber outro link na mesma aba', async () => {
+    const location = TestBed.inject(Location);
+    spyOn(location, 'replaceState');
+    spyOn(location, 'path').and.returnValue('/acompanhar#token=next-link');
+    const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
+    const opening = component.ngOnInit();
+    http.expectOne('/api/portal/veiculos').flush([]);
+    await tickRequests();
+    const previous = http.expectOne('/api/portal/servico-atual');
+    navigation.next(new NavigationEnd(2, '/acompanhar#token=next-link', '/acompanhar#token=next-link'));
+    expect(component.authenticated()).toBeFalse();
+    expect(component.service()).toBeNull();
+    await tickRequests();
+    http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
+    await tickRequests();
+    http.expectOne('/api/portal/acesso/link').flush(null);
+    await tickRequests();
+    http.expectOne('/api/portal/servico-atual').flush({ oficina: { nome: 'Nova oficina' }, servico: null });
+    await tickRequests();
+    previous.flush({ oficina: { nome: 'Antiga oficina' }, servico: { id: 'old-order' } });
+    await opening;
+    expect(component.office()?.nome).toBe('Nova oficina');
+    expect(component.service()).toBeNull();
+  });
+
+  it('serializa trocas de token e ignora autenticação anterior atrasada', async () => {
+    const location = TestBed.inject(Location);
+    spyOn(location, 'replaceState');
+    spyOn(location, 'path').and.returnValue('/acompanhar#token=second-link');
+    TestBed.inject(ActivatedRoute).snapshot.fragment = 'token=first-link';
+    const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
+    const opening = component.ngOnInit();
+    await tickRequests();
+    http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
+    await tickRequests();
+    const first = http.expectOne('/api/portal/acesso/link');
+    navigation.next(new NavigationEnd(2, '/acompanhar#token=second-link', '/acompanhar#token=second-link'));
+    await tickRequests();
+    http.expectNone('/api/auth/csrf');
+    first.flush(null);
+    await opening;
+    await tickRequests();
+    http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
+    await tickRequests();
+    const second = http.expectOne('/api/portal/acesso/link');
+    expect(second.request.body).toEqual({ token: 'second-link' });
+    second.flush(null);
+    await tickRequests();
+    http.expectOne('/api/portal/servico-atual').flush({ oficina: { nome: 'Nova oficina' }, servico: null });
+    await tickRequests();
+    expect(component.office()?.nome).toBe('Nova oficina');
+  });
 
   it('solicita código com resposta genérica sem expor cadastro', async () => {
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;

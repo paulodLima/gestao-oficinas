@@ -1,9 +1,10 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { ActivatedRoute, NavigationEnd, NavigationSkipped, Router } from '@angular/router';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { AdditionalDecisionComponent } from './additional-decision.component';
+import { Location } from '@angular/common';
 
 interface PortalVehicle { id: string; placa: string; veiculo: string; }
 interface PortalOffice { nome: string; telefone: string; email: string; }
@@ -149,9 +150,15 @@ interface PortalUpdate {
     @media(prefers-reduced-motion:reduce){.loading span{animation:none}}
   `
 })
-export class PortalAccessComponent implements OnInit {
+export class PortalAccessComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
+  private navigation?: Subscription;
+  private contextRevision = 0;
+  private serviceRevision = 0;
+  private accessQueue = Promise.resolve();
   private touchStartX = 0;
   slug = '';
   plate = '';
@@ -179,18 +186,71 @@ export class PortalAccessComponent implements OnInit {
   readonly activePhoto = computed(() => this.filteredPhotos().find(photo => photo.id === this.activePhotoId()) ?? null);
 
   async ngOnInit() {
-    const token = this.route.snapshot.queryParamMap.get('token');
-    if (!token) return;
+    this.navigation = this.router.events.subscribe(event => {
+      if (!(event instanceof NavigationEnd) && !(event instanceof NavigationSkipped)) return;
+      const url = new URL(this.location.path(true), 'https://portal.invalid');
+      const token = new URLSearchParams(url.hash.slice(1)).get('token') || url.searchParams.get('token');
+      if (token) void this.consumeLink(token);
+    });
+    const fragment = new URLSearchParams(this.route.snapshot.fragment ?? '');
+    const token = fragment.get('token') || this.route.snapshot.queryParamMap.get('token');
+    if (!token) { await this.restoreSession(); return; }
+    await this.consumeLink(token);
+  }
+
+  ngOnDestroy() { this.navigation?.unsubscribe(); this.contextRevision++; }
+
+  private consumeLink(token: string) {
+    const revision = ++this.contextRevision;
+    this.location.replaceState('/acompanhar');
+    this.authenticated.set(false);
+    this.vehicles.set([]);
+    this.office.set(null);
+    this.service.set(null);
+    this.photos.set([]);
+    this.updates.set([]);
+    this.closePhoto();
+    this.selectedVehicleId = '';
+    this.sent.set(false);
+    this.code = '';
+    this.id = '';
+    this.message.set('');
     this.busy.set(true);
+    this.loadingPortal.set(false);
+    // Serialize exchanges so an older response cannot replace the newer server grant.
+    this.accessQueue = this.accessQueue.then(() => this.authenticateLink(token, revision));
+    return this.accessQueue;
+  }
+
+  private async authenticateLink(token: string, revision: number) {
+    if (revision !== this.contextRevision) return;
     try {
       await firstValueFrom(this.http.post('/api/portal/acesso/link', { token }, { headers: await this.headers() }));
+      if (revision !== this.contextRevision) return;
       this.authenticated.set(true);
       await this.loadService();
     } catch {
-      this.message.set('Este link é inválido, expirou ou foi revogado.');
+      if (revision === this.contextRevision) this.message.set('Este link é inválido, expirou ou foi revogado.');
     } finally {
-      this.busy.set(false);
+      if (revision === this.contextRevision) this.busy.set(false);
     }
+  }
+
+  private async restoreSession() {
+    const revision = this.contextRevision;
+    this.busy.set(true);
+    try {
+      const vehicles = await firstValueFrom(this.http.get<PortalVehicle[]>('/api/portal/veiculos'));
+      if (revision !== this.contextRevision) return;
+      this.vehicles.set(vehicles);
+      this.authenticated.set(true);
+      await this.loadService(vehicles[0]?.id ?? '');
+    } catch (error) {
+      if (revision !== this.contextRevision) return;
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401) {
+        this.message.set('Não foi possível recuperar o acompanhamento. Tente novamente.');
+      }
+    } finally { if (revision === this.contextRevision) this.busy.set(false); }
   }
 
   async request() {
@@ -230,6 +290,9 @@ export class PortalAccessComponent implements OnInit {
   }
 
   async loadService(vehicleId = '') {
+    const context = this.contextRevision;
+    const revision = ++this.serviceRevision;
+    const current = () => context === this.contextRevision && revision === this.serviceRevision;
     this.loadingPortal.set(true);
     this.message.set('');
     this.service.set(null);
@@ -243,6 +306,7 @@ export class PortalAccessComponent implements OnInit {
       if (this.selectedVehicleId) params = params.set('veiculoId', this.selectedVehicleId);
       const result = await firstValueFrom(this.http.get<{ oficina: PortalOffice; servico: PortalService | null }>(
         '/api/portal/servico-atual', { params }));
+      if (!current()) return;
       this.office.set(result.oficina);
       this.service.set(result.servico);
       if (!result.servico) {
@@ -254,16 +318,18 @@ export class PortalAccessComponent implements OnInit {
         firstValueFrom(this.http.get<PortalPhoto[]>(`/api/portal/ordens-servico/${result.servico.id}/fotos`)),
         firstValueFrom(this.http.get<PortalUpdate[]>(`/api/portal/ordens-servico/${result.servico.id}/atualizacoes`))
       ]);
+      if (!current()) return;
       this.photos.set(photos);
       this.updates.set([...updates].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)));
     } catch (error) {
+      if (!current()) return;
       if (error instanceof HttpErrorResponse && error.status === 401) {
         this.expireAccess();
       } else {
         this.message.set('Não foi possível carregar o acompanhamento agora. Tente novamente.');
       }
     } finally {
-      this.loadingPortal.set(false);
+      if (current()) this.loadingPortal.set(false);
     }
   }
 

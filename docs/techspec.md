@@ -302,6 +302,18 @@ Migrações Flyway incrementais e imutáveis, inclusive tabelas Spring Session. 
 
 ## 9. Validação e rastreabilidade
 
+### Implementação da tarefa 16 — compartilhamento manual
+
+O detalhe da OS prepara uma mensagem mínima e abre `wa.me` por ação explícita,
+sem destinatário predefinido, disparo, outbox ou confirmação de entrega. Copiar
+link usa Clipboard API com seleção manual de fallback. Links novos usam fragmento
+em `/acompanhar#token=...`; o portal remove o token antes da troca por sessão e
+aceita links legados. Reload restaura sessão HTTP, sem persistir token no cliente.
+Criação/revogação são serializadas por OS. O token segue aleatório/hash persistido,
+sete dias ou encerramento, leitura restrita e revalidação de revogação/expiração.
+Consultar o portal sem concessão não invalida a sessão do proprietário.
+Detalhes e evidências: `tasks/prd-compartilhamento-whatsapp/`.
+
 [cenarios-validacao.md](cenarios-validacao.md) fornece massa sintética e casos positivos/negativos a implementar por módulo. Tarefa 1 valida apenas scaffold/inicialização e coerência documental; não declara testes de autorização aprovados antes de existirem módulos.
 
 Tarefas 2–4: identidade/cadastro; 5–6: OS/eventos; 8–9: fotos/vistoria; 10–11: portal; 12–14: prazos/adicionais; 15–18: notificações/entrega/avaliação; 19–20: consolidação de testes e liberação.

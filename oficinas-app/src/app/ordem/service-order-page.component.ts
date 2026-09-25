@@ -6,6 +6,7 @@ import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-
 import { FuelLevel, Inspection, InspectionChecklist, ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
   ServiceOrderStatus } from './service-order.service';
 import { AdditionalRequestComponent } from './additional-request.component';
+import { OrderShareComponent } from './order-share.component';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
   'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
@@ -18,7 +19,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
 
 @Component({
   selector: 'app-service-order-page',
-  imports: [ReactiveFormsModule, AdditionalRequestComponent],
+  imports: [ReactiveFormsModule, AdditionalRequestComponent, OrderShareComponent],
   templateUrl: './service-order-page.component.html',
   styleUrls: ['./service-order-page.component.css', './inspection.css']
 })
@@ -43,8 +44,6 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly busy = signal(false);
   readonly error = signal('');
   readonly success = signal('');
-  readonly customerAccessUrl = signal('');
-  readonly customerAccessExpires = signal('');
   readonly search = this.builder.nonNullable.control('', Validators.maxLength(100));
   readonly statusOptions = ACTIVE_STATUSES;
   readonly activeCount = computed(() => this.orders().filter(item => !['ENTREGUE', 'CANCELADO'].includes(item.status)).length);
@@ -104,7 +103,7 @@ export class ServiceOrderPageComponent implements OnInit {
     finally { this.loading.set(false); }
   }
   newOrder() {
-    this.selected.set(null); this.timeline.set([]); this.forecasts.set([]); this.customerAccessUrl.set(''); this.clearMessages();
+    this.selected.set(null); this.timeline.set([]); this.forecasts.set([]); this.clearMessages();
     this.form.reset({ clienteId: '', veiculoId: '', relatoInicial: '',
       entradaEm: this.localDateTime(new Date()), kmEntrada: '', previsaoEm: '' });
   }
@@ -112,34 +111,11 @@ export class ServiceOrderPageComponent implements OnInit {
     const vehicle = this.vehicles().find(item => item.id === this.form.controls.veiculoId.value);
     if (vehicle?.clienteId !== this.form.controls.clienteId.value) this.form.controls.veiculoId.reset('');
   }
-  async createCustomerAccess() {
-    const order = this.selected();
-    if (!order) return;
-    this.busy.set(true); this.clearMessages();
-    try {
-      const link = await this.service.createCustomerAccess(order.id);
-      this.customerAccessUrl.set(`${window.location.origin}/acompanhar?token=${encodeURIComponent(link.token)}`);
-      this.customerAccessExpires.set(link.expiraEm);
-      this.success.set('Link exclusivo criado. O link anterior desta OS foi revogado.');
-    } catch (error) { this.showError(error, 'Não foi possível criar o link de acompanhamento.'); }
-    finally { this.busy.set(false); }
-  }
-  async revokeCustomerAccess() {
-    const order = this.selected();
-    if (!order) return;
-    this.busy.set(true); this.clearMessages();
-    try {
-      await this.service.revokeCustomerAccess(order.id);
-      this.customerAccessUrl.set(''); this.customerAccessExpires.set('');
-      this.success.set('Links de acompanhamento desta OS foram revogados.');
-    } catch (error) { this.showError(error, 'Não foi possível revogar o acesso do cliente.'); }
-    finally { this.busy.set(false); }
-  }
   async searchOrders() {
     if (this.search.invalid || this.busy()) return;
     await this.perform(async () => {
       const result = await this.service.orders(this.search.value);
-      this.orders.set(result.items); this.selected.set(result.items[0] ?? null); this.customerAccessUrl.set('');
+      this.orders.set(result.items); this.selected.set(result.items[0] ?? null);
       this.resetWorkflowForms(); this.timeline.set([]); this.forecasts.set([]);
       if (this.selected()) { await this.loadHistory(this.selected()!.id); await this.loadPhotos(this.selected()!.id); }
     }, 'Busca atualizada.');
@@ -147,7 +123,7 @@ export class ServiceOrderPageComponent implements OnInit {
   async selectOrder(order: ServiceOrder) {
     await this.perform(async () => {
       const detail = await this.service.order(order.id);
-      this.selected.set(detail); this.customerAccessUrl.set(''); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id); await this.loadInspection(detail.id);
+      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id); await this.loadInspection(detail.id);
     }, 'Detalhes atualizados.');
   }
   async createOrder() {

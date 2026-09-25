@@ -42,6 +42,7 @@ public class ServiceOrderAccessController {
     @Transactional
     public Link create(Authentication authentication, @PathVariable UUID orderId) {
         Identidade owner = owner(authentication);
+        lockOrder(owner, orderId);
         ServiceOrder order = orders.order(owner, orderId);
         if (!order.status().active()) {
             throw new ApiException(409, "ORDEM_ENCERRADA", "Não é possível compartilhar uma ordem encerrada.");
@@ -66,12 +67,20 @@ public class ServiceOrderAccessController {
     @Transactional
     public ResponseEntity<Void> revoke(Authentication authentication, @PathVariable UUID orderId) {
         Identidade owner = owner(authentication);
+        lockOrder(owner, orderId);
         orders.order(owner, orderId);
         jdbc.update("""
             UPDATE portal_link_os SET revogado_em=?
              WHERE oficina_id=? AND ordem_servico_id=? AND revogado_em IS NULL
             """, Timestamp.from(clock.instant()), owner.oficinaId(), orderId);
         return ResponseEntity.noContent().build();
+    }
+
+    private void lockOrder(Identidade owner, UUID orderId) {
+        // Serialize issuance/revocation even when the order has no previous links.
+        var rows = jdbc.query("SELECT id FROM ordem_servico WHERE oficina_id=? AND id=? FOR UPDATE",
+            (result, row) -> result.getObject(1, UUID.class), owner.oficinaId(), orderId);
+        if (rows.isEmpty()) throw new ApiException(404, "ORDEM_NAO_ENCONTRADA", "Ordem não encontrada.");
     }
 
     private Identidade owner(Authentication authentication) {

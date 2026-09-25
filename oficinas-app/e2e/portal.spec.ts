@@ -12,6 +12,7 @@ test('portal mantém fotos antigas após mudança de status e permite filtrar e 
     const url = new URL(route.request().url());
     if (url.pathname === '/api/auth/csrf') return route.fulfill({ json: { token: 'csrf', headerName: 'X-CSRF-TOKEN' } });
     if (url.pathname === '/api/portal/acesso/link') return route.fulfill({ status: 204 });
+    if (url.pathname === '/api/portal/veiculos') return route.fulfill({ json: [] });
     if (url.pathname === '/api/portal/servico-atual') return route.fulfill({ json: {
       oficina: { nome: 'Oficina Horizonte', telefone: '(61) 3333-4444', email: 'contato@horizonte.test' },
       servico: { id: 'os-11', numero: 11, status, previsaoEm: '2026-09-28T18:00:00Z',
