@@ -21,8 +21,14 @@ public class CustomerController {
     @GetMapping
     public PageResult<Customer> list(Authentication authentication, @RequestParam(defaultValue = "") String q,
                                      @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        return service.customers(identity(authentication), q, page, size);
+        if (!q.isBlank()) throw new ApiException(400, "PESQUISA_PRIVADA", "Use a pesquisa protegida.");
+        return service.customers(identity(authentication), "", page, size);
     }
+    @PostMapping("/pesquisa")
+    public PageResult<Customer> search(Authentication authentication, @RequestBody Search input) {
+        return service.customers(identity(authentication), input.q(), input.page(), input.size());
+    }
+    public record Search(String q, int page, int size) {}
     @GetMapping("/{id}")
     public Customer get(Authentication authentication, @PathVariable UUID id) { return service.customer(identity(authentication), id); }
     @PostMapping

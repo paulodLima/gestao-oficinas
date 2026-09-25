@@ -61,7 +61,7 @@ class AdditionalDecisionIntegrationTest {
         UUID challenge = UUID.randomUUID();
         String secret = "development-only-secret-change-me";
         String hash = hmac(secret, challenge, "123456");
-        jdbc.update("INSERT INTO adicional_desafio(id,oficina_id,cliente_id,ordem_servico_id,solicitacao_id,versao_id,versao_solicitacao,codigo_hash,expira_em) VALUES (?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO adicional_desafio(id,oficina_id,cliente_id,ordem_servico_id,solicitacao_id,versao_id,versao_solicitacao,codigo_hash,expira_em,acesso_versao) VALUES (?,?,?,?,?,?,?,?,?,0)",
             challenge, shop, customer, order, request, version, 0, hash, java.sql.Timestamp.from(Instant.now().plusSeconds(600)));
         var input = new AdditionalDecisionService.Confirmation(challenge, "123456", 0,
             List.of(new AdditionalDecisionService.BlockDecision("grupo:freios",

@@ -24,7 +24,8 @@ public class CustomerVehicleRepository {
 
     public PageResult<Customer> customers(UUID shopId, String query, int page, int size) {
         String term = "%" + escape(query.toLowerCase(Locale.ROOT)) + "%";
-        String digits = "%" + query.replaceAll("\\D", "") + "%";
+        String numbers = query.replaceAll("\\D", "");
+        String digits = numbers.isEmpty() && !query.isEmpty() ? "!" : "%" + numbers + "%";
         String where = "oficina_id=? AND (lower(nome) LIKE ? OR cpf LIKE ? OR lower(email) LIKE ? OR telefone LIKE ?)";
         long total = jdbc.queryForObject("SELECT count(*) FROM cliente WHERE " + where, Long.class,
             shopId, term, digits, term, term);
@@ -54,9 +55,10 @@ public class CustomerVehicleRepository {
             int rows = jdbc.update("""
                 UPDATE cliente SET nome=?,cpf=?,telefone=?,email=?,
                   email_verificado_em=CASE WHEN email=? THEN email_verificado_em ELSE NULL END,
+                  acesso_versao=CASE WHEN email<>? OR ativo<>? THEN acesso_versao+1 ELSE acesso_versao END,
                   ativo=?,versao=versao+1,updated_at=now()
                 WHERE oficina_id=? AND id=? AND versao=?
-                """, name, cpf, phone, email, email, active, shopId, id, version);
+                """, name, cpf, phone, email, email, email, active, active, shopId, id, version);
             if (rows != 1) staleCustomer(shopId, id);
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(409, "CLIENTE_DUPLICADO", "Já existe um cliente com este CPF na oficina.");

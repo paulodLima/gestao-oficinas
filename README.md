@@ -195,7 +195,7 @@ $env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/oficinas"
 $env:SPRING_DATASOURCE_USERNAME = "postgres"
 $env:SPRING_DATASOURCE_PASSWORD = "postgres"
 $env:MAIL_FROM = "oficinas@local.test"
-$env:CODE_SECRET = "troque-por-um-segredo-com-24-caracteres"
+$env:CODE_SECRET = "exemplo-local-substituir-por-segredo-aleatorio"
 cd oficinas-api
 ./mvnw.cmd spring-boot:run
 ```
@@ -282,7 +282,7 @@ na fila comercial. E2E da central/portal com API simulada:
 
 ## Antes de publicar em produção
 
-O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banco privado com credenciais próprias e SMTP externo configurado (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `PUBLIC_URL`). Defina também um `CODE_SECRET` aleatório e exclusivo, com ao menos 24 caracteres, para o HMAC dos códigos de cliente. O perfil exige cookie Secure e URL pública HTTPS. SMTP externo e domínio remetente ainda não foram validados.
+O Compose fornecido é de desenvolvimento. Use HTTPS, perfil Spring `prod`, banco privado com credenciais próprias e SMTP externo configurado (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `PUBLIC_URL`). Defina também um `CODE_SECRET` aleatório e exclusivo, com ao menos 32 caracteres, para o HMAC dos códigos de cliente. O perfil exige cookie Secure e origem pública HTTPS, sem credenciais, query ou fragmento; o segredo padrão de desenvolvimento é rejeitado. SMTP externo e domínio remetente ainda não foram validados. Confira o [guia de segurança e evidências da tarefa 19](tasks/prd-auditoria-autorizacao/validacao.md) antes da implantação.
 
 O proxy Express sobrescreve o IP encaminhado; a API só o aceita do host definido em `APP_AUTH_TRUSTED_PROXY_HOST` (`app` no Compose). Se houver outro balanceador, configure a cadeia confiável antes de publicar; não habilite confiança irrestrita em cabeçalhos. Não exponha banco nem Mailpit publicamente.
 

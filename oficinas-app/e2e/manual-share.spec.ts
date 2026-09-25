@@ -41,7 +41,7 @@ test('prepara, copia, abre WhatsApp manualmente e revoga sem registrar entrega',
   await context.route('https://wa.me/**', route => route.fulfill({ contentType: 'text/plain', body: 'WhatsApp simulado' }));
   await page.getByRole('button', { name: 'Preparar link seguro' }).click();
   const linkField = page.getByLabel('Link para copiar manualmente');
-  await expect(linkField).toHaveValue(`http://localhost:4200/acompanhar#token=${token}`);
+  await expect(linkField).toHaveValue(`${new URL(page.url()).origin}/acompanhar#token=${token}`);
   await expect(page.locator('app-order-share')).not.toContainText(/Ana Souza|BRA1E23|52998224725/);
   await page.getByRole('button', { name: 'Copiar link', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Link copiado');
@@ -103,7 +103,7 @@ test('fragmento troca por sessão, some da URL e não é necessário no reload',
   });
   await page.goto(`/acompanhar#token=${token}`);
   await expect(page.getByRole('heading', { name: 'Volkswagen T-Cross' })).toBeVisible();
-  await expect(page).toHaveURL('http://localhost:4200/acompanhar');
+  await expect(page).toHaveURL(new URL('/acompanhar', page.url()).href);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Volkswagen T-Cross' })).toBeVisible();
   expect(exchanges).toBe(1);
@@ -138,7 +138,7 @@ test('consome links diferentes ou repetidos na mesma aba sem manter a OS anterio
   await expect(page.getByRole('heading', { name: 'Acompanhe seu veículo' })).toBeVisible();
   for (const next of ['synthetic-A', 'synthetic-B', 'synthetic-B']) {
     await page.goto(`/acompanhar#token=${next}`);
-    await expect(page).toHaveURL('http://localhost:4200/acompanhar');
+    await expect(page).toHaveURL(new URL('/acompanhar', page.url()).href);
     await expect(page.getByRole('heading', { name: `Veículo ${next}` })).toBeVisible();
   }
   expect(exchanged).toEqual(['synthetic-A', 'synthetic-B', 'synthetic-B']);
@@ -171,7 +171,7 @@ test('não restaura dados atrasados de A durante a navegação para o link B', a
   await page.goto('/acompanhar#token=synthetic-A');
   await pending;
   await page.goto('/acompanhar#token=synthetic-B');
-  await expect(page).toHaveURL('http://localhost:4200/acompanhar');
+  await expect(page).toHaveURL(new URL('/acompanhar', page.url()).href);
   await expect(page.getByRole('heading', { name: 'Veículo synthetic-A' })).toHaveCount(0);
   release();
   await expect(page.getByRole('heading', { name: 'Veículo synthetic-B' })).toBeVisible();

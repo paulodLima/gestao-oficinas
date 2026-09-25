@@ -29,17 +29,17 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 6.0 Fluxo de status e linha do tempo — [Trello](https://trello.com/c/nfcGaImj)
 - [x] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
 - [x] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
-- [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
+- [x] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
 - [x] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
 - [x] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
 - [x] 12.0 Previsão de conclusão e atrasos — [Trello](https://trello.com/c/eE1TpMrV)
 - [x] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
-- [ ] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
-- [ ] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
+- [x] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
+- [x] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
 - [x] 16.0 Compartilhamento manual pelo WhatsApp — [Trello](https://trello.com/c/rHAC9p6Z)
 - [x] 17.0 Encerramento, cancelamento e retorno do veículo — [Trello](https://trello.com/c/5A1vsurk)
 - [x] 18.0 Resumo de entrega e avaliação — [Trello](https://trello.com/c/8ZDp53o3)
-- [ ] 19.0 Auditoria e testes de autorização — [Trello](https://trello.com/c/g2RG0IJA)
+- [x] 19.0 Auditoria e testes de autorização — [Trello](https://trello.com/c/g2RG0IJA)
 - [ ] 20.0 Validação móvel e entrega do MVP — [Trello](https://trello.com/c/YphJ3GJG)
 
 ## Definição de concluído
@@ -370,11 +370,11 @@ Checklist de quilometragem, combustível, objetos, avarias e relato; roteiro de 
 
 ## Subtarefas
 
-- [ ] 9.1 Persistir checklist e rascunho de vistoria ligado à OS.
-- [ ] 9.2 Criar roteiro de fotos opcional, indicação de faltantes e captura/galeria móvel.
-- [ ] 9.3 Implementar confirmação e correção auditável sem apagar versão anterior.
-- [ ] 9.4 Preservar campos durante falha de envio e publicar somente informações liberadas.
-- [ ] 9.5 Testes unitários: confirmação/correção; integração: rascunho e histórico; E2E móvel: permissão negada, rede lenta e retomada.
+- [x] 9.1 Persistir checklist e rascunho de vistoria ligado à OS.
+- [x] 9.2 Criar roteiro de fotos opcional, indicação de faltantes e captura/galeria móvel.
+- [x] 9.3 Implementar confirmação e correção auditável sem apagar versão anterior.
+- [x] 9.4 Preservar campos durante falha de envio e publicar somente informações liberadas.
+- [x] 9.5 Testes unitários: confirmação/correção; integração: rascunho e histórico; E2E móvel: falha de envio e retomada. Consolidação de câmera/rede/orientação na tarefa 20.
 
 ## Critérios de aceite
 
@@ -570,11 +570,11 @@ Decisão por item independente ou grupo indivisível com comentário opcional.
 
 ## Subtarefas
 
-- [ ] 14.1 Criar tela de decisão com versão, total adicional e prazo antes da confirmação.
-- [ ] 14.2 Exigir código verificado para confirmar aprovação/recusa por item ou grupo.
-- [ ] 14.3 Gravar decisão auditável e idempotente e recalcular estado agregado.
-- [ ] 14.4 Bloquear execução de adicionais não aprovados e decisões sobre versão antiga.
-- [ ] 14.5 Testes unitários: decisão parcial, grupo e estado; integração: clique duplo, alteração concorrente de versão e autorização; concorrência com encerramento será completada na 17.
+- [x] 14.1 Criar tela de decisão com versão, total adicional e prazo antes da confirmação.
+- [x] 14.2 Exigir código verificado para confirmar aprovação/recusa por item ou grupo.
+- [x] 14.3 Gravar decisão auditável e idempotente e recalcular estado agregado.
+- [x] 14.4 Bloquear execução de adicionais não aprovados e decisões sobre versão antiga.
+- [x] 14.5 Testes unitários: decisão parcial, grupo e estado; integração: clique duplo, alteração concorrente de versão e autorização; concorrência com encerramento validada na 17.
 
 ## Critérios de aceite
 
@@ -775,11 +775,11 @@ Cobrir oficinas, clientes, arquivos, status, vistoria, publicação, decisões, 
 
 ## Subtarefas
 
-- [ ] 19.1 Revisar auditoria já implementada nos módulos, sem adiar autorização até esta tarefa.
-- [ ] 19.2 Executar matriz de duas oficinas/clientes incluindo download de arquivos.
-- [ ] 19.3 Consolidar testes de transferência de veículo, links antigos e sessões revogadas.
-- [ ] 19.4 Revisar logs/URLs sem CPF/tokens e configuração HTTPS de produção.
-- [ ] 19.5 Testes unitários: políticas e redação de logs; integração: enumeração, concorrência de OS/decisões e trilha persistida.
+- [x] 19.1 Revisar auditoria já implementada nos módulos, sem adiar autorização até esta tarefa.
+- [x] 19.2 Executar matriz de duas oficinas/clientes incluindo download de arquivos.
+- [x] 19.3 Consolidar testes de transferência de veículo, links antigos e sessões revogadas.
+- [x] 19.4 Revisar logs/URLs sem CPF/tokens e configuração HTTPS de produção.
+- [x] 19.5 Testes unitários: políticas e redação de logs; integração: enumeração, concorrência de OS/decisões e trilha persistida.
 
 ## Critérios de aceite
 

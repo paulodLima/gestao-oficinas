@@ -2,9 +2,11 @@ package br.com.gestao.oficinas_api.portal;
 
 import br.com.gestao.oficinas_api.identidade.ApiException;
 import br.com.gestao.oficinas_api.identidade.AuthProperties;
-import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail;
+import br.com.gestao.oficinas_api.identidade.ClientAddress;
+import br.com.gestao.oficinas_api.identidade.RateLimit;
 import br.com.gestao.oficinas_api.ordem.PhotoStorage;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
@@ -31,6 +33,7 @@ import static org.mockito.Mockito.*;
 class PortalAccessTransactionTest {
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final HttpSession session = mock(HttpSession.class);
+    private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
     private final SimpleTransactionStatus transaction = new SimpleTransactionStatus();
     private final UUID challengeId = UUID.randomUUID();
@@ -39,9 +42,10 @@ class PortalAccessTransactionTest {
     @BeforeEach
     void setUp() throws Exception {
         Instant now = Instant.parse("2026-09-25T12:00:00Z");
-        var target = new PortalAccessController(jdbc, mock(TransactionalEmail.class),
+        var target = new PortalAccessController(jdbc, mock(PortalChallengeIssuer.class),
             new AuthProperties(URI.create("http://localhost:8080"), false, "test-only-secret-at-least-24-characters"),
-            Clock.fixed(now, ZoneOffset.UTC), mock(PhotoStorage.class), new PortalAccessPolicy());
+            Clock.fixed(now, ZoneOffset.UTC), mock(PhotoStorage.class), new PortalAccessPolicy(),
+            mock(RateLimit.class), mock(ClientAddress.class));
         var advice = new TransactionInterceptor();
         advice.setTransactionManager(transactions);
         advice.setTransactionAttributeSource(new AnnotationTransactionAttributeSource());
@@ -64,7 +68,7 @@ class PortalAccessTransactionTest {
     @Test
     void commitsFailedAttemptWhileRejectingCodeAndLeavingSessionUnauthenticated() {
         ApiException error = assertThrows(ApiException.class, () -> controller.validateCode(
-            new PortalAccessController.Validate(challengeId, "123456"), session));
+            new PortalAccessController.Validate(challengeId, "123456"), request));
         assertEquals("CODIGO_INVALIDO", error.code);
         verify(jdbc).update(contains("tentativas=tentativas+1"), eq(challengeId), eq(5));
         verify(transactions).commit(transaction);
@@ -77,7 +81,7 @@ class PortalAccessTransactionTest {
         doThrow(new DataAccessResourceFailureException("database unavailable"))
             .when(jdbc).update(contains("tentativas=tentativas+1"), eq(challengeId), eq(5));
         assertThrows(DataAccessResourceFailureException.class, () -> controller.validateCode(
-            new PortalAccessController.Validate(challengeId, "123456"), session));
+            new PortalAccessController.Validate(challengeId, "123456"), request));
         verify(transactions).rollback(transaction);
         verify(transactions, never()).commit(any());
         verifyNoInteractions(session);

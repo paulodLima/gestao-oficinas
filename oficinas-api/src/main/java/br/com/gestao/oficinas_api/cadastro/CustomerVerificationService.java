@@ -30,12 +30,12 @@ public class CustomerVerificationService {
 
     @Transactional
     public Challenge issue(Identidade owner, UUID customerId, String clientAddress) {
+        lockCustomer(owner, customerId);
         Customer customer = repository.customer(owner.oficinaId(), customerId);
         if (customer.email().isBlank()) throw new ApiException(400, "EMAIL_AUSENTE", "Informe um e-mail antes de solicitar a verificação.");
         if (customer.emailVerificado()) throw new ApiException(409, "EMAIL_JA_VERIFICADO", "Este e-mail já está verificado.");
         limits.check("customer-verification:" + owner.oficinaId() + ":" + customerId, 5);
         limits.check("customer-verification-ip:" + clientAddress, 30);
-        jdbc.queryForObject("SELECT id FROM cliente WHERE oficina_id=? AND id=? FOR UPDATE", UUID.class, owner.oficinaId(), customerId);
         Integer recent = jdbc.queryForObject("""
             SELECT count(*) FROM verificacao_email_cliente
              WHERE oficina_id=? AND cliente_id=? AND created_at>now()-interval '60 seconds'
@@ -60,6 +60,7 @@ public class CustomerVerificationService {
     @Transactional(noRollbackFor = ApiException.class)
     public Customer confirm(Identidade owner, UUID customerId, UUID challengeId, String code) {
         if (challengeId == null || code == null || !code.matches("[0-9]{6}")) throw invalid();
+        lockCustomer(owner, customerId);
         var rows = jdbc.query("""
             SELECT codigo_hash,expira_em,tentativas,usado_em
               FROM verificacao_email_cliente
@@ -84,6 +85,12 @@ public class CustomerVerificationService {
         if (updated != 1) throw invalid();
         repository.audit(owner.oficinaId(), owner.id(), "CLIENTE", customerId, "EMAIL_VERIFICADO");
         return repository.customer(owner.oficinaId(), customerId);
+    }
+
+    private void lockCustomer(Identidade owner, UUID customerId) {
+        var rows = jdbc.query("SELECT id FROM cliente WHERE oficina_id=? AND id=? FOR UPDATE",
+            (result, row) -> result.getObject(1, UUID.class), owner.oficinaId(), customerId);
+        if (rows.isEmpty()) throw new ApiException(404, "NAO_ENCONTRADO", "Cadastro não encontrado.");
     }
 
     private String hash(UUID challengeId, String code) {

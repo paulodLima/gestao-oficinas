@@ -1,6 +1,7 @@
 package br.com.gestao.oficinas_api.portal;
 
 import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail;
+import br.com.gestao.oficinas_api.ordem.PhotoStorage;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.URI;
@@ -16,6 +17,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +40,7 @@ import static org.mockito.Mockito.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 class PortalAccessIntegrationTest {
     @Container
     static final TestPostgres postgres = new TestPostgres();
@@ -48,31 +54,276 @@ class PortalAccessIntegrationTest {
 
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
+    @Autowired PhotoStorage storage;
     @MockitoBean TransactionalEmail mail;
     private final ObjectMapper mapper = new ObjectMapper();
     private static final String PASSWORD = "Oficina-segura-123";
 
+    @BeforeEach void resetRateWindows() { jdbc.update("DELETE FROM auth_limite"); }
+
     class Browser {
-        final HttpClient client = HttpClient.newBuilder()
-            .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL)).build();
+        final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+        final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
+        String sessionId() {
+            return cookies.getCookieStore().getCookies().stream().filter(cookie -> cookie.getName().equals("OFICINAS_SESSION"))
+                .map(java.net.HttpCookie::getValue).findFirst().orElseThrow();
+        }
 
         HttpResponse<String> get(String path) throws Exception {
             return client.send(HttpRequest.newBuilder(uri(path)).GET().build(), HttpResponse.BodyHandlers.ofString());
         }
 
         HttpResponse<String> send(String method, String path, Map<String, ?> body) throws Exception {
+            return send(method, path, body, Map.of());
+        }
+
+        HttpResponse<String> send(String method, String path, Map<String, ?> body, Map<String, String> headers) throws Exception {
             String csrf = mapper.readTree(get("/api/auth/csrf").body()).get("token").asText();
-            return client.send(HttpRequest.newBuilder(uri(path))
+            var builder = HttpRequest.newBuilder(uri(path))
                 .header("Content-Type", "application/json")
                 .header("X-CSRF-TOKEN", csrf)
-                .method(method, HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                .build(), HttpResponse.BodyHandlers.ofString());
+                .method(method, HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
+            headers.forEach(builder::header);
+            return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         }
     }
 
     record Fixture(Browser owner, UUID shopId, String slug, UUID customerId, UUID vehicleId,
                    UUID orderId, String email) {}
     record Challenge(UUID id, String code) {}
+
+    @Test
+    void additionalApprovalRequiresCurrentVerifiedContactAndThrottlesResends() throws Exception {
+        Fixture fixture = fixture("CAD1A23", "52998224725");
+        String orderPath = "/api/ordens-servico/" + fixture.orderId();
+        var draft = fixture.owner().send("POST", orderPath + "/adicionais", Map.of(
+            "problema", "Filtro danificado", "justificativa", "Substituir para corrigir a filtragem",
+            "impactoPrazo", "Sem impacto", "fotoIds", java.util.List.of(), "itens", java.util.List.of(
+                Map.of("tipo", "PECA", "descricao", "Filtro novo", "quantidade", 1, "valorUnitario", 50, "grupoDependencia", ""))));
+        assertEquals(201, draft.statusCode(), draft.body());
+        UUID additional = UUID.fromString(mapper.readTree(draft.body()).get("id").asText());
+        var sent = fixture.owner().send("POST", orderPath + "/adicionais/" + additional + "/envio", Map.of("expectedVersion", 0));
+        assertEquals(200, sent.statusCode(), sent.body());
+        JsonNode current = mapper.readTree(sent.body());
+        long version = current.get("versao").asLong();
+        String itemId = current.get("versoes").get(0).get("itens").get(0).get("id").asText();
+        String token = mapper.readTree(fixture.owner().send("POST", orderPath + "/acesso", Map.of()).body()).get("token").asText();
+        Browser customer = new Browser();
+        assertEquals(204, customer.send("POST", "/api/portal/acesso/link", Map.of("token", token)).statusCode());
+        String path = "/api/portal/ordens-servico/" + fixture.orderId() + "/adicionais/" + additional;
+        reset(mail);
+        var issued = customer.send("POST", path + "/codigo", Map.of());
+        assertEquals(200, issued.statusCode(), issued.body());
+        UUID id = UUID.fromString(mapper.readTree(issued.body()).get("desafioId").asText());
+        var content = ArgumentCaptor.forClass(String.class);
+        verify(mail).send(eq(fixture.email()), anyString(), content.capture());
+        var matcher = Pattern.compile("código é: ([0-9]{6})").matcher(content.getValue());
+        assertTrue(matcher.find());
+        var input = Map.of("desafioId", id, "codigo", matcher.group(1), "versao", version,
+            "decisoes", java.util.List.of(Map.of("bloco", "item:" + itemId, "decisao", "APROVADO")));
+        assertEquals(429, customer.send("POST", path + "/codigo", Map.of()).statusCode());
+        assertNull(jdbc.queryForObject("SELECT usado_em FROM adicional_desafio WHERE id=?", java.sql.Timestamp.class, id));
+        verify(mail, times(1)).send(eq(fixture.email()), anyString(), anyString());
+        assertEquals(200, fixture.owner().send("PATCH", "/api/clientes/" + fixture.customerId(),
+            Map.of("versao", 0, "email", "new-contact@customer.test")).statusCode());
+        assertEquals(400, customer.send("POST", path + "/decisoes", input,
+            Map.of("Idempotency-Key", "unverified-contact")).statusCode());
+        jdbc.update("UPDATE cliente SET email_verificado_em=now() WHERE id=?", fixture.customerId());
+        var rejected = customer.send("POST", path + "/decisoes", input, Map.of("Idempotency-Key", "old-contact"));
+        assertEquals(400, rejected.statusCode(), rejected.body());
+        assertEquals(200, fixture.owner().send("PATCH", "/api/clientes/" + fixture.customerId(),
+            Map.of("versao", 1, "email", fixture.email())).statusCode());
+        jdbc.update("UPDATE cliente SET email_verificado_em=now() WHERE id=?", fixture.customerId());
+        assertEquals(400, customer.send("POST", path + "/decisoes", input,
+            Map.of("Idempotency-Key", "returned-contact")).statusCode());
+        assertEquals(200, fixture.owner().send("PATCH", "/api/clientes/" + fixture.customerId(), Map.of("versao", 2, "ativo", false)).statusCode());
+        assertEquals(200, fixture.owner().send("PATCH", "/api/clientes/" + fixture.customerId(), Map.of("versao", 3, "ativo", true)).statusCode());
+        assertEquals(400, customer.send("POST", path + "/decisoes", input,
+            Map.of("Idempotency-Key", "reactivated-contact")).statusCode());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM adicional_item_decisao WHERE solicitacao_id=?", Integer.class, additional));
+        jdbc.update("UPDATE adicional_desafio SET created_at=now()-interval '61 seconds' WHERE id=?", id);
+        reset(mail);
+        var fresh = customer.send("POST", path + "/codigo", Map.of());
+        assertEquals(200, fresh.statusCode(), fresh.body());
+        var newContent = ArgumentCaptor.forClass(String.class);
+        verify(mail).send(eq(fixture.email()), anyString(), newContent.capture());
+        var newMatcher = Pattern.compile("código é: ([0-9]{6})").matcher(newContent.getValue());
+        assertTrue(newMatcher.find());
+        var accepted = customer.send("POST", path + "/decisoes", Map.of(
+            "desafioId", mapper.readTree(fresh.body()).get("desafioId").asText(), "codigo", newMatcher.group(1),
+            "versao", version, "decisoes", input.get("decisoes")), Map.of("Idempotency-Key", "new-contact"));
+        assertEquals(200, accepted.statusCode(), accepted.body());
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM adicional_item_decisao WHERE solicitacao_id=?", Integer.class, additional));
+    }
+
+    @Test
+    void deliveryFailureRollsBackChallengeAndNeverLogsProviderSecrets(CapturedOutput output) throws Exception {
+        Fixture fixture = fixture("LOG1A23", "52998224725");
+        reset(mail);
+        String secret = "private-provider-token-52998224725";
+        doThrow(new IllegalStateException(secret)).when(mail).send(anyString(), anyString(), anyString());
+        var response = new Browser().send("POST", "/api/portal/acesso/codigo",
+            Map.of("oficinaSlug", fixture.slug(), "placa", "LOG1A23"));
+        assertEquals(202, response.statusCode());
+        UUID challengeId = UUID.fromString(mapper.readTree(response.body()).get("desafioId").asText());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM portal_desafio WHERE id=?", Integer.class, challengeId));
+        assertFalse(response.body().contains(secret));
+        assertFalse(output.getAll().contains(secret));
+        assertFalse(output.getAll().contains(fixture.email()));
+        reset(mail);
+    }
+
+    @Test
+    void transferThroughApiRevokesPreviousCustomerAccessAndOldCodes() throws Exception {
+        Fixture fixture = fixture("TRF1A23", "52998224725");
+        Browser visitor = new Browser();
+        Challenge used = challenge(fixture, visitor);
+        assertEquals(204, visitor.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", used.id(), "codigo", used.code())).statusCode());
+        Challenge pending = challenge(fixture, new Browser());
+        var created = fixture.owner().send("POST", "/api/clientes", Map.of("nome", "Novo responsável",
+            "cpf", "16899535009", "telefone", "", "email", UUID.randomUUID() + "@customer.test"));
+        assertEquals(201, created.statusCode());
+        UUID nextCustomer = UUID.fromString(mapper.readTree(created.body()).get("id").asText());
+        String transfer = "/api/veiculos/" + fixture.vehicleId() + "/transferencias";
+        assertEquals(409, fixture.owner().send("POST", transfer, Map.of("novoClienteId", nextCustomer, "expectedVersion", 0)).statusCode());
+        assertEquals(200, fixture.owner().send("POST", "/api/ordens-servico/" + fixture.orderId() + "/encerramento",
+            Map.of("tipo", "ENTREGUE", "confirmado", true, "cancelarPendencias", false, "expectedVersion", 0)).statusCode());
+        assertEquals(200, fixture.owner().send("POST", transfer, Map.of("novoClienteId", nextCustomer, "expectedVersion", 0)).statusCode());
+        var next = fixture.owner().send("POST", "/api/ordens-servico", Map.of("clienteId", nextCustomer,
+            "veiculoId", fixture.vehicleId(), "relatoInicial", "Revisão do novo responsável",
+            "entradaEm", Instant.now().minusSeconds(5).toString(), "kmEntrada", 15000));
+        assertEquals(201, next.statusCode(), next.body());
+        UUID nextOrder = UUID.fromString(mapper.readTree(next.body()).get("id").asText());
+        assertTrue(mapper.readTree(visitor.get("/api/portal/veiculos").body()).isEmpty());
+        assertTrue(mapper.readTree(visitor.get("/api/portal/servico-atual").body()).get("servico").isNull());
+        assertEquals(404, visitor.get("/api/portal/ordens-servico/" + nextOrder + "/atualizacoes").statusCode());
+        assertEquals(400, new Browser().send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", pending.id(), "codigo", pending.code())).statusCode());
+    }
+
+    @Test
+    void suppressesRepeatedDeliveryWithoutRevealingAccountsAndInvalidatesPreviousCodes() throws Exception {
+        Fixture fixture = fixture("ENV1A23", "52998224725");
+        Browser visitor = new Browser();
+        Challenge first = challenge(fixture, visitor);
+        reset(mail);
+        var suppressed = visitor.send("POST", "/api/portal/acesso/codigo",
+            Map.of("oficinaSlug", fixture.slug(), "placa", "ENV1A23"));
+        assertEquals(202, suppressed.statusCode());
+        verifyNoInteractions(mail);
+        UUID hiddenId = UUID.fromString(mapper.readTree(suppressed.body()).get("desafioId").asText());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM portal_desafio WHERE id=?", Integer.class, hiddenId));
+        Challenge next = challenge(fixture, visitor);
+        assertEquals(400, visitor.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", first.id(), "codigo", first.code())).statusCode());
+        assertEquals(204, visitor.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", next.id(), "codigo", next.code())).statusCode());
+        jdbc.update("UPDATE portal_desafio SET created_at=now()-interval '61 seconds' WHERE cliente_id=?", fixture.customerId());
+        reset(mail);
+        for (int attempt = 0; attempt < 35; attempt++) {
+            assertEquals(202, visitor.send("POST", "/api/portal/acesso/codigo",
+                Map.of("oficinaSlug", fixture.slug(), "placa", "ZZZ9Z99")).statusCode());
+        }
+        assertEquals(202, visitor.send("POST", "/api/portal/acesso/codigo",
+            Map.of("oficinaSlug", fixture.slug(), "placa", "ENV1A23")).statusCode());
+        verifyNoInteractions(mail);
+    }
+
+    @Test
+    void rotatesSessionForCodeAndLinkAndInvalidLinkClearsOnlyOperationalGrant() throws Exception {
+        Fixture fixture = fixture("SES1A23", "52998224725");
+        Browser owner = fixture.owner();
+        Challenge challenge = challenge(fixture, owner);
+        String beforeCode = owner.sessionId();
+        assertEquals(204, owner.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", challenge.id(), "codigo", challenge.code())).statusCode());
+        assertNotEquals(beforeCode, owner.sessionId());
+        String token = mapper.readTree(owner.send("POST", "/api/ordens-servico/" + fixture.orderId() + "/acesso", Map.of()).body())
+            .get("token").asText();
+        String beforeLink = owner.sessionId();
+        assertEquals(204, owner.send("POST", "/api/portal/acesso/link", Map.of("token", token)).statusCode());
+        assertNotEquals(beforeLink, owner.sessionId());
+        assertEquals(400, owner.send("POST", "/api/portal/acesso/link", Map.of("token", "")).statusCode());
+        assertEquals(401, owner.get("/api/portal/servico-atual").statusCode());
+        assertEquals(200, owner.get("/api/auth/me").statusCode());
+        assertEquals(204, owner.send("POST", "/api/portal/acesso/link", Map.of("token", token)).statusCode());
+        assertEquals(204, owner.send("DELETE", "/api/ordens-servico/" + fixture.orderId() + "/acesso", Map.of()).statusCode());
+        assertEquals(401, owner.get("/api/portal/servico-atual").statusCode());
+        assertEquals(200, owner.get("/api/auth/me").statusCode());
+        assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM cadastro_auditoria WHERE recurso_id=? AND acao LIKE 'LINK_OPERACIONAL_%'",
+            Integer.class, fixture.orderId()));
+    }
+
+    @Test
+    void dormantSessionAndPendingCodeNeverReviveAfterContactChangeAndReverification() throws Exception {
+        Fixture fixture = fixture("REV1A23", "52998224725");
+        Browser visitor = new Browser();
+        Challenge first = challenge(fixture, visitor);
+        assertEquals(204, visitor.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", first.id(), "codigo", first.code())).statusCode());
+        Challenge pending = challenge(fixture, new Browser());
+        String path = "/api/clientes/" + fixture.customerId();
+        assertEquals(200, fixture.owner().send("PATCH", path, Map.of("versao", 0, "email", "changed@customer.test")).statusCode());
+        assertEquals(200, fixture.owner().send("PATCH", path, Map.of("versao", 1, "email", fixture.email())).statusCode());
+        jdbc.update("UPDATE cliente SET email_verificado_em=now() WHERE id=?", fixture.customerId());
+        assertEquals(401, visitor.get("/api/portal/veiculos").statusCode());
+        assertEquals(400, new Browser().send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", pending.id(), "codigo", pending.code())).statusCode());
+        Challenge fresh = challenge(fixture, visitor);
+        assertEquals(204, visitor.send("POST", "/api/portal/acesso/validacao",
+            Map.of("desafioId", fresh.id(), "codigo", fresh.code())).statusCode());
+        assertEquals(200, fixture.owner().send("PATCH", path, Map.of("versao", 2, "ativo", false)).statusCode());
+        assertEquals(200, fixture.owner().send("PATCH", path, Map.of("versao", 3, "ativo", true)).statusCode());
+        assertEquals(401, visitor.get("/api/portal/veiculos").statusCode());
+    }
+
+    @Test
+    void privateDownloadsEnforceOfficeCustomerPublicationAndRevocation() throws Exception {
+        Fixture fixture = fixture("FOT1A23", "52998224725");
+        Fixture outsider = fixture("FOT2A23", "16899535009");
+        Fixture neighbor = createVisit(fixture.owner(), fixture.shopId(), fixture.slug(), "FOT3A23", "16899535009");
+        UUID ownerId = jdbc.queryForObject("SELECT criado_por FROM ordem_servico WHERE id=?", UUID.class, fixture.orderId());
+        var bytes = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", bytes);
+        var stored = storage.store(new org.springframework.mock.web.MockMultipartFile("file", "synthetic.png", "image/png", bytes.toByteArray()));
+        try {
+            UUID photo = insertPhoto(fixture, ownerId, "RECEBIDO", true, "synthetic.png", "1 minute");
+            UUID privatePhoto = insertPhoto(fixture, ownerId, "RECEBIDO", false, "private.png", "1 minute");
+            jdbc.update("UPDATE ordem_servico_foto SET chave_arquivo=?,chave_miniatura=?,tipo_conteudo=? WHERE id IN (?,?)",
+                stored.key(), stored.thumbnailKey(), stored.contentType(), photo, privatePhoto);
+            String publicPath = "/api/portal/ordens-servico/" + fixture.orderId() + "/fotos/" + photo + "/conteudo?tamanho=original";
+            String ownerPath = "/api/ordens-servico/" + fixture.orderId() + "/fotos/" + photo + "/arquivo";
+            Browser customer = new Browser();
+            Challenge challenge = challenge(fixture, customer);
+            assertEquals(204, customer.send("POST", "/api/portal/acesso/validacao",
+                Map.of("desafioId", challenge.id(), "codigo", challenge.code())).statusCode());
+            var content = customer.client.send(HttpRequest.newBuilder(uri(publicPath)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+            assertEquals(200, content.statusCode());
+            assertArrayEquals(bytes.toByteArray(), content.body());
+            assertTrue(content.headers().firstValue("Cache-Control").orElse("").contains("no-store"));
+            assertEquals(401, new Browser().get(publicPath).statusCode());
+            assertEquals(200, fixture.owner().get(ownerPath).statusCode());
+            assertEquals(401, customer.get(ownerPath).statusCode());
+            assertEquals(404, outsider.owner().get(ownerPath).statusCode());
+            assertEquals(404, customer.get(publicPath.replace(photo.toString(), privatePhoto.toString())).statusCode());
+            Browser otherCustomer = new Browser();
+            Challenge otherChallenge = challenge(outsider, otherCustomer);
+            assertEquals(204, otherCustomer.send("POST", "/api/portal/acesso/validacao",
+                Map.of("desafioId", otherChallenge.id(), "codigo", otherChallenge.code())).statusCode());
+            assertEquals(404, otherCustomer.get(publicPath).statusCode());
+            Browser neighborBrowser = new Browser();
+            Challenge neighborCode = challenge(neighbor, neighborBrowser);
+            assertEquals(204, neighborBrowser.send("POST", "/api/portal/acesso/validacao",
+                Map.of("desafioId", neighborCode.id(), "codigo", neighborCode.code())).statusCode());
+            assertEquals(404, neighborBrowser.get(publicPath).statusCode());
+            jdbc.update("UPDATE ordem_servico_foto SET publicada=false WHERE id=?", photo);
+            assertEquals(404, customer.get(publicPath).statusCode());
+        } finally {
+            storage.delete(stored.key());
+            storage.delete(stored.thumbnailKey());
+        }
+    }
 
     @Test
     void keepsCodeRequestNonEnumerableAndEnforcesExpiryAttemptsAndSingleUse() throws Exception {
@@ -361,6 +612,10 @@ class PortalAccessIntegrationTest {
         JsonNode me = mapper.readTree(owner.get("/api/auth/me").body());
         UUID shopId = UUID.fromString(me.get("oficina").get("id").asText());
         String slug = mapper.readTree(owner.get("/api/oficina").body()).get("slug").asText();
+        return createVisit(owner, shopId, slug, plate, cpf);
+    }
+
+    private Fixture createVisit(Browser owner, UUID shopId, String slug, String plate, String cpf) throws Exception {
         String customerEmail = UUID.randomUUID() + "@customer.test";
         JsonNode customer = mapper.readTree(owner.send("POST", "/api/clientes", Map.of(
             "nome", "Cliente Portal", "cpf", cpf, "telefone", "(61) 99999-0000", "email", customerEmail)).body());
@@ -380,6 +635,7 @@ class PortalAccessIntegrationTest {
     }
 
     private Challenge challenge(Fixture fixture, Browser browser) throws Exception {
+        jdbc.update("UPDATE portal_desafio SET created_at=now()-interval '61 seconds' WHERE cliente_id=?", fixture.customerId());
         reset(mail);
         var response = browser.send("POST", "/api/portal/acesso/codigo",
             Map.of("oficinaSlug", fixture.slug(), "placa", fixture.vehicleId() == null ? "" : plate(fixture.vehicleId())));

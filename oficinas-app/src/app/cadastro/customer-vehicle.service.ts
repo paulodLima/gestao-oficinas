@@ -23,8 +23,10 @@ export class CustomerVehicleService {
   vehicle(id: string) {
     return firstValueFrom(this.http.get<Vehicle>(`/api/veiculos/${id}`));
   }
-  customers(q = '') {
-    return firstValueFrom(this.http.get<PageResult<Customer>>('/api/clientes', { params: new HttpParams().set('q', q).set('size', 100) }));
+  async customers(q = '') {
+    if (!q) return firstValueFrom(this.http.get<PageResult<Customer>>('/api/clientes', { params: { size: 100 } }));
+    return firstValueFrom(this.http.post<PageResult<Customer>>('/api/clientes/pesquisa',
+      { q, page: 0, size: 100 }, { headers: await this.headers() }));
   }
   vehicles(q = '') {
     return firstValueFrom(this.http.get<PageResult<Vehicle>>('/api/veiculos', { params: new HttpParams().set('q', q).set('size', 100) }));
