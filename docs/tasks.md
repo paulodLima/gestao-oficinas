@@ -30,7 +30,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [x] 7.0 Painel operacional e Kanban — [Trello](https://trello.com/c/rBCxHlID)
 - [x] 8.0 Upload privado e publicação de fotos — [Trello](https://trello.com/c/YVCEJX9Q)
 - [ ] 9.0 Vistoria de entrada totalmente móvel — [Trello](https://trello.com/c/Ygcj1CnD)
-- [ ] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
+- [x] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
 - [x] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
 - [x] 12.0 Previsão de conclusão e atrasos — [Trello](https://trello.com/c/eE1TpMrV)
 - [x] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
@@ -410,11 +410,11 @@ Placa no contexto da oficina e código no contato verificado; alternativa de lin
 
 ## Subtarefas
 
-- [ ] 10.1 Implementar solicitação de código no contexto da oficina sem revelar cadastro.
-- [ ] 10.2 Emitir código de uso único e sessão limitada; reutilizar e-mail da tarefa 2.
-- [ ] 10.3 Criar links aleatórios de acompanhamento restritos à OS, com expiração e revogação.
-- [ ] 10.4 Criar login móvel e seleção de veículos autorizados; separar sessão de identidade e autorização de cada OS.
-- [ ] 10.5 Testes unitários: prazo, uso único e tentativas; integração: placa em outra oficina, cliente sem vínculo e link sem poder aprovar.
+- [x] 10.1 Implementar solicitação de código no contexto da oficina sem revelar cadastro.
+- [x] 10.2 Emitir código de uso único e sessão limitada; reutilizar e-mail da tarefa 2.
+- [x] 10.3 Criar links aleatórios de acompanhamento restritos à OS, com expiração e revogação.
+- [x] 10.4 Criar login móvel e seleção de veículos autorizados; separar sessão de identidade e autorização de cada OS.
+- [x] 10.5 Testes unitários: prazo, uso único e tentativas; integração: placa em outra oficina, cliente sem vínculo e link sem poder aprovar.
 
 ## Critérios de aceite
 
@@ -430,7 +430,10 @@ Placa no contexto da oficina e código no contato verificado; alternativa de lin
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: implementada na master no commit f81bf43 e reconferida em 25/09/2026.
+A conferência corrigiu o rollback indevido do contador de códigos inválidos e adicionou teste
+de regressão usando o interceptor transacional real do Spring. A execução da integração
+PostgreSQL continua dependente de Docker disponível; não confundir compilação com execução.
 
 ---
 
