@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
 import { ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderService } from './service-order.service';
@@ -30,7 +31,9 @@ describe('Ordens de serviço', () => {
     service = jasmine.createSpyObj<ServiceOrderService>('ServiceOrderService',
       ['orders', 'order', 'create', 'timeline', 'changeStatus', 'publish', 'forecasts', 'updateForecast',
         'photos', 'inspection', 'saveInspection', 'confirmInspection', 'correctInspection']);
-    registrations = jasmine.createSpyObj<CustomerVehicleService>('CustomerVehicleService', ['customers', 'vehicles']);
+    registrations = jasmine.createSpyObj<CustomerVehicleService>('CustomerVehicleService', ['customers', 'vehicles', 'customer', 'vehicle']);
+    registrations.customer.and.resolveTo(customer);
+    registrations.vehicle.and.resolveTo(vehicle);
     service.orders.and.resolveTo({ items: [order], page: 0, size: 100, totalElements: 1, totalPages: 1 });
     service.order.and.resolveTo(order);
     service.timeline.and.resolveTo([event]);
@@ -147,6 +150,75 @@ describe('Ordens de serviço', () => {
     const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
     expect(component.deadlineLabel({ ...order, atrasada: true })).toContain('ultrapassada');
     expect(component.deadlineLabel({ ...order, aguardandoRetirada: true })).toContain('retirada');
+  });
+
+  it('retorno usa o responsável atual sem copiar dados do atendimento anterior', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load();
+    const closed = { ...order, status: 'ENTREGUE' as const };
+    component.selected.set(closed);
+    registrations.customer.and.resolveTo({ ...customer, id: 'c2' });
+    registrations.vehicle.and.resolveTo({ ...vehicle, clienteId: 'c2' });
+    await component.returnVisit(closed);
+    expect(component.selected()).toBeNull();
+    expect(component.form.controls.clienteId.value).toBe('c2');
+    expect(component.form.controls.veiculoId.value).toBe('v1');
+    expect(component.form.controls.relatoInicial.value).toBe('');
+    expect(component.form.controls.kmEntrada.value).toBe('');
+    expect(service.create).not.toHaveBeenCalled();
+    expect(registrations.customer).toHaveBeenCalledWith('c2');
+  });
+
+  it('não preenche vínculo antigo quando veículo não está mais disponível', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); const closed = { ...order, status: 'CANCELADO' as const }; component.selected.set(closed);
+    registrations.vehicle.and.rejectWith(new HttpErrorResponse({ status: 404 }));
+    await component.returnVisit(closed);
+    expect(component.form.controls.clienteId.value).toBe('');
+    expect(component.form.controls.veiculoId.value).toBe('');
+    expect(component.selected()).toEqual(closed);
+    expect(component.error()).toContain('indisponível');
+    expect(component.success()).toBe('');
+  });
+
+  for (const vehicleOutsidePage of [true, false]) {
+    it(`prepara retorno fora da primeira página de clientes (veículo fora: ${vehicleOutsidePage})`, async () => {
+      const firstCustomers = Array.from({ length: 100 }, (_, index) => ({ ...customer, id: `other-c-${index}` }));
+      const firstVehicles = Array.from({ length: 100 }, (_, index) => ({ ...vehicle, id: `other-v-${index}` }));
+      registrations.customers.and.resolveTo({ items: firstCustomers, page: 0, size: 100, totalElements: 101, totalPages: 2 });
+      registrations.vehicles.and.resolveTo({ items: vehicleOutsidePage ? firstVehicles : [vehicle], page: 0, size: 100, totalElements: 101, totalPages: 2 });
+      const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+      await component.load(); const closed = { ...order, status: 'ENTREGUE' as const }; component.selected.set(closed);
+      await component.returnVisit(closed);
+      expect(registrations.vehicle).toHaveBeenCalledOnceWith('v1');
+      expect(registrations.customer).toHaveBeenCalledOnceWith('c1');
+      expect(component.form.controls.veiculoId.value).toBe('v1');
+      expect(component.form.controls.clienteId.value).toBe('c1');
+      expect(component.customers()).toContain(customer);
+      expect(component.availableVehicles()).toContain(vehicle);
+      expect(component.form.controls.relatoInicial.value).toBe('');
+      expect(component.form.controls.kmEntrada.value).toBe('');
+      expect(service.create).not.toHaveBeenCalled();
+    });
+  }
+
+  it('não prepara retorno para responsável inativo', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); const closed = { ...order, status: 'ENTREGUE' as const }; component.selected.set(closed);
+    registrations.customer.and.resolveTo({ ...customer, ativo: false });
+    await component.returnVisit(closed);
+    expect(component.selected()).toEqual(closed);
+    expect(component.error()).toContain('inativo');
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('recebe encerramento preservando diretório e sem sobrescrever outra seleção', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.selected.set({ ...order, id: 'outra' });
+    await component.orderClosed({ ...order, status: 'ENTREGUE' });
+    expect(component.selected()?.id).toBe('outra');
+    expect(component.orders()[0].status).toBe('ENTREGUE');
+    expect(component.deadlineLabel(component.orders()[0])).toBe('Encerrada · histórico interno');
   });
 
   it('preserva o formulário no navegador quando a confirmação falha', async () => {

@@ -1,0 +1,36 @@
+<section class="closure" aria-labelledby="closure-title">
+  <p class="eyebrow">ENCERRAMENTO DO ATENDIMENTO</p>
+  <h3 id="closure-title">{{ active() ? 'Entregar ou cancelar' : 'Atendimento encerrado' }}</h3>
+  @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+  @if (active()) {
+    <p>Pronto para retirada mantém a OS ativa. Encerre somente após confirmar a entrega ou o cancelamento.</p>
+    @if (!reviewing()) {
+      <button type="button" [disabled]="busy()" (click)="review()">{{ busy() ? 'Consultando pendências…' : 'Revisar encerramento' }}</button>
+    } @else {
+      <form [formGroup]="form" (ngSubmit)="confirm()">
+        <fieldset [disabled]="busy()">
+          <label for="closure-kind">Tipo de encerramento</label>
+          <select id="closure-kind" formControlName="tipo"><option value="ENTREGUE">Veículo entregue</option><option value="CANCELADO">Atendimento cancelado</option></select>
+          <label for="closure-reason">Motivo {{ form.controls.tipo.value === 'CANCELADO' ? '(obrigatório)' : '(opcional)' }}</label>
+          <textarea id="closure-reason" rows="2" maxlength="1000" formControlName="motivo"></textarea>
+          <p class="impact">Esta OS não poderá ser reaberta. Alterações e aprovações serão bloqueadas, e os links exclusivos perderão a validade. O histórico continuará disponível para a oficina.</p>
+          @if (summary()?.pendencias; as pending) {
+            <p class="pending">{{ pending }} solicitação(ões) adicional(is) pendente(s).</p>
+            <label class="check"><input type="checkbox" formControlName="cancelarPendencias"> Cancelar explicitamente todos os adicionais pendentes, preservando decisões já registradas.</label>
+          } @else { <p>Nenhum adicional pendente.</p> }
+          <label class="check"><input type="checkbox" formControlName="confirmado"> Confirmo o encerramento definitivo desta OS.</label>
+          <div class="actions"><button type="button" (click)="back()">Voltar sem encerrar</button><button type="submit" class="confirm">{{ busy() ? 'Encerrando…' : 'Confirmar encerramento' }}</button></div>
+        </fieldset>
+      </form>
+    }
+  } @else {
+    <p>Histórico preservado, somente para consulta. Os acessos operacionais desta OS foram encerrados.</p>
+    @if (summary()?.encerramento; as detail) {
+      <p><strong>{{ detail.tipo === 'ENTREGUE' ? 'Entregue' : 'Cancelado' }}</strong> em {{ date(detail.createdAt) }} · {{ detail.autorNome }}</p>
+      @if (detail.motivo) { <p>Motivo: {{ detail.motivo }}</p> }
+      @if (detail.pendenciasCanceladas) { <p>{{ detail.pendenciasCanceladas }} pendência(s) cancelada(s) explicitamente.</p> }
+    }
+    <button type="button" (click)="returnVisit.emit(order)">Abrir nova OS para este veículo</button>
+    <p class="small">Uma nova visita tem número e acesso próprios. O vínculo atual do veículo será conferido.</p>
+  }
+</section>

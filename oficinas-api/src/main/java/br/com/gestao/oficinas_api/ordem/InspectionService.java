@@ -100,7 +100,7 @@ public class InspectionService {
     }
 
     private void active(Identidade owner, UUID order) {
-        if (!orders.order(owner.oficinaId(), order).status().active()) {
+        if (!orders.lockActive(owner.oficinaId(), order).status().active()) {
             throw new ApiException(409, "ORDEM_ENCERRADA", "A ordem de serviço já foi encerrada.");
         }
     }

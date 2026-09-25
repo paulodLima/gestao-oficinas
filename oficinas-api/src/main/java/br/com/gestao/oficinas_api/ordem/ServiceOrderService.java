@@ -30,6 +30,9 @@ public class ServiceOrderService {
     public ServiceOrder order(Identidade owner, UUID id) {
         return repository.order(owner.oficinaId(), id);
     }
+    public ServiceOrder lockActive(Identidade owner, UUID id) {
+        return repository.lockActive(owner.oficinaId(), id);
+    }
     public List<ServiceOrderEvent> timeline(Identidade owner, UUID id) {
         repository.order(owner.oficinaId(), id);
         return repository.timeline(owner.oficinaId(), id);
@@ -94,7 +97,11 @@ public class ServiceOrderService {
             text(input.textoPublico(), 2000, "O texto público deve ter até 2000 caracteres."),
             text(input.textoInterno(), 2000, "A observação interna deve ter até 2000 caracteres."),
             input.expectedVersion());
-        return repository.changeStatus(owner.oficinaId(), owner.id(), id, data);
+        ServiceOrder result = repository.changeStatus(owner.oficinaId(), owner.id(), id, data);
+        if (result.status() == ServiceOrderStatus.PRONTO_PARA_RETIRADA) {
+            notifications.record(owner.oficinaId(), id, NotificationEvent.PRONTO_PARA_RETIRADA, id + ":" + result.versao());
+        }
+        return result;
     }
 
     @Transactional

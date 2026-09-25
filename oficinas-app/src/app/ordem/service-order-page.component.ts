@@ -7,6 +7,7 @@ import { FuelLevel, Inspection, InspectionChecklist, ServiceOrder, ServiceOrderE
   ServiceOrderStatus } from './service-order.service';
 import { AdditionalRequestComponent } from './additional-request.component';
 import { OrderShareComponent } from './order-share.component';
+import { OrderClosureComponent } from './order-closure.component';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
   'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
@@ -19,7 +20,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
 
 @Component({
   selector: 'app-service-order-page',
-  imports: [ReactiveFormsModule, AdditionalRequestComponent, OrderShareComponent],
+  imports: [ReactiveFormsModule, AdditionalRequestComponent, OrderShareComponent, OrderClosureComponent],
   templateUrl: './service-order-page.component.html',
   styleUrls: ['./service-order-page.component.css', './inspection.css']
 })
@@ -47,10 +48,10 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly search = this.builder.nonNullable.control('', Validators.maxLength(100));
   readonly statusOptions = ACTIVE_STATUSES;
   readonly activeCount = computed(() => this.orders().filter(item => !['ENTREGUE', 'CANCELADO'].includes(item.status)).length);
-  readonly availableVehicles = computed(() => {
+  availableVehicles() {
     const customerId = this.form.controls.clienteId.value;
     return customerId ? this.vehicles().filter(item => item.clienteId === customerId) : this.vehicles();
-  });
+  }
   readonly form = this.builder.nonNullable.group({
     clienteId: ['', Validators.required],
     veiculoId: ['', Validators.required],
@@ -110,6 +111,39 @@ export class ServiceOrderPageComponent implements OnInit {
   syncVehicle() {
     const vehicle = this.vehicles().find(item => item.id === this.form.controls.veiculoId.value);
     if (vehicle?.clienteId !== this.form.controls.clienteId.value) this.form.controls.veiculoId.reset('');
+  }
+  isActive(order: ServiceOrder) { return !['ENTREGUE', 'CANCELADO'].includes(order.status); }
+  async orderClosed(order: ServiceOrder) {
+    this.orders.update(items => items.map(item => item.id === order.id ? order : item));
+    if (this.selected()?.id !== order.id) return;
+    this.selected.set(order); this.resetWorkflowForms();
+    sessionStorage.removeItem(this.inspectionKey(order.id));
+    this.success.set('OS encerrada. Histórico preservado e acessos antigos revogados.');
+    await this.loadHistory(order.id);
+  }
+  async returnVisit(order: ServiceOrder) {
+    if (this.isActive(order) || this.busy()) return;
+    this.busy.set(true); this.clearMessages();
+    try {
+      const vehicle = await this.registrations.vehicle(order.veiculoId);
+      const customer = await this.registrations.customer(vehicle.clienteId);
+      if (this.selected()?.id !== order.id) return;
+      if (!customer.ativo) {
+        this.error.set('O responsável atual está inativo. Regularize o cadastro antes de abrir uma nova OS.'); return;
+      }
+      this.customers.update(items => [customer, ...items.filter(item => item.id !== customer.id)]);
+      this.vehicles.update(items => [vehicle, ...items.filter(item => item.id !== vehicle.id)]);
+      this.newOrder();
+      this.form.patchValue({ clienteId: customer.id, veiculoId: vehicle.id });
+      this.success.set('Nova visita: confira o responsável atual e informe relato e quilometragem novos.');
+    } catch (error) {
+      if (this.selected()?.id !== order.id) return;
+      if (error instanceof HttpErrorResponse && error.status === 404) {
+        this.error.set('Veículo ou responsável atual indisponível. Confira o cadastro antes de abrir uma nova OS.');
+      } else {
+        this.showError(error, 'Não foi possível conferir o vínculo atual do veículo. Tente novamente.');
+      }
+    } finally { this.busy.set(false); }
   }
   async searchOrders() {
     if (this.search.invalid || this.busy()) return;
@@ -280,6 +314,7 @@ export class ServiceOrderPageComponent implements OnInit {
     return value.toLowerCase().replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
   }
   deadlineLabel(order: ServiceOrder) {
+    if (!this.isActive(order)) return 'Encerrada · histórico interno';
     if (order.aguardandoRetirada) return 'Pronto · aguardando retirada';
     if (order.atrasada) return 'Previsão ultrapassada';
     if (order.previsaoEm) return 'Dentro da previsão';

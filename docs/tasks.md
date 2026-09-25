@@ -37,7 +37,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [ ] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
 - [ ] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
 - [x] 16.0 Compartilhamento manual pelo WhatsApp — [Trello](https://trello.com/c/rHAC9p6Z)
-- [ ] 17.0 Encerramento, cancelamento e retorno do veículo — [Trello](https://trello.com/c/5A1vsurk)
+- [x] 17.0 Encerramento, cancelamento e retorno do veículo — [Trello](https://trello.com/c/5A1vsurk)
 - [ ] 18.0 Resumo de entrega e avaliação — [Trello](https://trello.com/c/8ZDp53o3)
 - [ ] 19.0 Auditoria e testes de autorização — [Trello](https://trello.com/c/g2RG0IJA)
 - [ ] 20.0 Validação móvel e entrega do MVP — [Trello](https://trello.com/c/YphJ3GJG)
@@ -686,12 +686,12 @@ Pronto mantém OS ativa; entregue/cancelado encerra e preserva histórico intern
 
 ## Subtarefas
 
-- [ ] 17.1 Implementar confirmação de entrega/cancelamento e encerramento transacional.
-- [ ] 17.2 Resolver ou cancelar adicionais pendentes e bloquear escrita operacional posterior.
-- [ ] 17.3 Revogar autorizações antigas da OS e manter histórico interno consultável.
-- [ ] 17.4 Permitir nova OS e atualizar consulta do serviço atual sem redirecionar link antigo.
-- [ ] 17.5 Integrar notificação de pronto/encerramento.
-- [ ] 17.6 Testes unitários: pronto versus entregue; integração: aprovação concorrente, revogação de sessão aberta e nova visita; E2E: atendimento completo e retorno.
+- [x] 17.1 Implementar confirmação de entrega/cancelamento e encerramento transacional.
+- [x] 17.2 Resolver ou cancelar adicionais pendentes e bloquear escrita operacional posterior.
+- [x] 17.3 Revogar autorizações antigas da OS e manter histórico interno consultável.
+- [x] 17.4 Permitir nova OS e atualizar consulta do serviço atual sem redirecionar link antigo.
+- [x] 17.5 Integrar notificação de pronto/encerramento.
+- [x] 17.6 Testes unitários: pronto versus entregue; integração: aprovação concorrente, revogação de sessão aberta e nova visita; E2E: atendimento completo e retorno.
 
 ## Critérios de aceite
 
@@ -705,9 +705,12 @@ Pronto mantém OS ativa; entregue/cancelado encerra e preserva histórico intern
 
 ## Entrega e validação
 
-Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
-
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Implementada e validada: encerramento transacional com confirmação, cancelamento explícito de pendências,
+bloqueio de escrita posterior, revogação de acessos antigos, histórico interno e retorno com nova OS.
+Notificações de pronto/encerramento integradas à outbox. Retorno consulta o vínculo atual por ID,
+independente da paginação. 103 testes Java, 81 Angular e 22 E2E aprovados, build e pacote executável aprovados.
+Revisão independente aprovada após corrigir a consulta paginada no retorno.
+Evidências: `tasks/prd-encerramento-retorno/validacao.md` e `17_task_review.md`. Sem deploy de produção.
 
 ---
 

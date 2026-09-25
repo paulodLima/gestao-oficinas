@@ -47,6 +47,15 @@ export interface InspectionChecklist {
 }
 export interface Inspection { id: string; numeroVersao: number; estado: 'RASCUNHO' | 'CONFIRMADA'; checklist: InspectionChecklist; motivoCorrecao: string | null; createdAt: string; updatedAt: string; }
 export interface CustomerAccessLink { token: string; expiraEm: string; }
+export interface ClosureInput {
+  tipo: 'ENTREGUE' | 'CANCELADO'; motivo: string; confirmado: boolean;
+  cancelarPendencias: boolean; expectedVersion: number;
+}
+export interface ClosureSummary {
+  versao: number; pendencias: number;
+  encerramento: { tipo: 'ENTREGUE' | 'CANCELADO'; motivo: string | null;
+    pendenciasCanceladas: number; createdAt: string; autorNome: string } | null;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ServiceOrderService {
@@ -57,6 +66,13 @@ export class ServiceOrderService {
   }
   order(id: string) {
     return firstValueFrom(this.http.get<ServiceOrder>(`/api/ordens-servico/${id}`));
+  }
+  closureSummary(id: string) {
+    return firstValueFrom(this.http.get<ClosureSummary>(`/api/ordens-servico/${id}/encerramento`));
+  }
+  async closeOrder(id: string, input: ClosureInput) {
+    return firstValueFrom(this.http.post<ServiceOrder>(`/api/ordens-servico/${id}/encerramento`, input,
+      { headers: await this.headers() }));
   }
   async create(input: ServiceOrderInput) {
     return firstValueFrom(this.http.post<ServiceOrder>('/api/ordens-servico', input,

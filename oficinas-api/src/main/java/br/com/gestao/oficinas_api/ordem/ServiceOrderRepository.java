@@ -15,6 +15,17 @@ public class ServiceOrderRepository {
     private final JdbcTemplate jdbc;
     public ServiceOrderRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public ServiceOrder lockActive(UUID shopId, UUID id) {
+        jdbc.query("SELECT id FROM ordem_servico WHERE oficina_id=? AND id=? FOR UPDATE",
+            (rs, row) -> rs.getObject(1, UUID.class), shopId, id);
+        ServiceOrder current = order(shopId, id);
+        if (!current.status().active()) {
+            throw new ApiException(409, "ORDEM_ENCERRADA", "A ordem de serviço já foi encerrada.");
+        }
+        return current;
+    }
+
     public ServiceOrder order(UUID shopId, UUID id) {
         return jdbc.query(select() + " WHERE os.oficina_id=? AND os.id=?", this::map, shopId, id)
             .stream().findFirst().orElseThrow(ServiceOrderRepository::notFound);

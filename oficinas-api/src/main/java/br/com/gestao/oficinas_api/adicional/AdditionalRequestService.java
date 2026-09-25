@@ -134,7 +134,7 @@ public class AdditionalRequestService {
     }
 
     private void requireActive(Identidade owner, UUID orderId) {
-        ServiceOrder order = orders.order(owner, orderId);
+        ServiceOrder order = orders.lockActive(owner, orderId);
         if (!order.status().active()) {
             throw new ApiException(409, "ORDEM_ENCERRADA", "A ordem de serviço já foi encerrada.");
         }

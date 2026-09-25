@@ -17,6 +17,12 @@ export interface VehicleInput { placa: string; marca: string; modelo: string; an
 @Injectable({ providedIn: 'root' })
 export class CustomerVehicleService {
   private readonly http = inject(HttpClient);
+  customer(id: string) {
+    return firstValueFrom(this.http.get<Customer>(`/api/clientes/${id}`));
+  }
+  vehicle(id: string) {
+    return firstValueFrom(this.http.get<Vehicle>(`/api/veiculos/${id}`));
+  }
   customers(q = '') {
     return firstValueFrom(this.http.get<PageResult<Customer>>('/api/clientes', { params: new HttpParams().set('q', q).set('size', 100) }));
   }
