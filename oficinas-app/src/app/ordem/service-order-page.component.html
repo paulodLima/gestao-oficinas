@@ -117,6 +117,8 @@
             }
           </section>
 
+          <app-additional-request [order]="order" [photos]="photos()"></app-additional-request>
+
           <section class="timeline" aria-labelledby="timeline-title">
             <p class="step">06 / HISTÓRICO</p><h3 id="timeline-title">Linha do tempo</h3>
             @if (!timeline().length) { <p class="hint">Nenhum evento registrado.</p> }

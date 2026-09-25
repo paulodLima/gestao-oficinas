@@ -11,8 +11,8 @@
 
 ## Subtarefas
 
-- [ ] 13.1 Rascunho e persistência de itens adicionais.
-- [ ] 13.2 Totais decimais e grupos dependentes.
-- [ ] 13.3 Envio, imutabilidade e substituição versionada.
-- [ ] 13.4 Interface de preparação e revisão.
-- [ ] 13.5 Testes unitários e integração de versões e acesso.
+- [x] 13.1 Rascunho e persistência de itens adicionais.
+- [x] 13.2 Totais decimais e grupos dependentes.
+- [x] 13.3 Envio, imutabilidade e substituição versionada.
+- [x] 13.4 Interface de preparação e revisão.
+- [x] 13.5 Testes unitários e integração de versões e acesso.

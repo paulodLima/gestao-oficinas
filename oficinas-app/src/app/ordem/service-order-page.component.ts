@@ -5,6 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Customer, CustomerVehicleService, Vehicle } from '../cadastro/customer-vehicle.service';
 import { FuelLevel, Inspection, InspectionChecklist, ServiceOrder, ServiceOrderEvent, ServiceOrderForecast, ServiceOrderInput, ServiceOrderService, ServicePhoto,
   ServiceOrderStatus } from './service-order.service';
+import { AdditionalRequestComponent } from './additional-request.component';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
   'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
@@ -17,7 +18,7 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
 
 @Component({
   selector: 'app-service-order-page',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, AdditionalRequestComponent],
   templateUrl: './service-order-page.component.html',
   styleUrls: ['./service-order-page.component.css', './inspection.css']
 })
