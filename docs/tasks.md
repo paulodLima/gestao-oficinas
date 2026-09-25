@@ -33,7 +33,7 @@ Os IDs não representam ordem estrita: por exemplo, previsão (12.0) precede pai
 - [ ] 10.0 Acesso seguro do cliente — [Trello](https://trello.com/c/BKmjxu7M)
 - [x] 11.0 Portal do cliente e galeria de todas as etapas — [Trello](https://trello.com/c/yjRbzLTo)
 - [x] 12.0 Previsão de conclusão e atrasos — [Trello](https://trello.com/c/eE1TpMrV)
-- [ ] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
+- [x] 13.0 Solicitar e versionar serviços adicionais — [Trello](https://trello.com/c/ZQcTV0MJ)
 - [ ] 14.0 Aprovação e recusa de adicionais pelo cliente — [Trello](https://trello.com/c/YvQN4Y7e)
 - [ ] 15.0 Notificações e e-mails transacionais — [Trello](https://trello.com/c/Ygx2Pt8V)
 - [ ] 16.0 Compartilhamento manual pelo WhatsApp — [Trello](https://trello.com/c/rHAC9p6Z)
@@ -528,11 +528,11 @@ Problema, justificativa, fotos, peças/mão de obra, quantidades, valores e impa
 
 ## Subtarefas
 
-- [ ] 13.1 Criar rascunho de adicional com itens, quantidades, preços, justificativa, fotos e impacto no prazo.
-- [ ] 13.2 Calcular totais decimais e agrupar itens dependentes.
-- [ ] 13.3 Congelar versão enviada e criar substituição sem apagar decisões anteriores.
-- [ ] 13.4 Criar tela para preparar, revisar, enviar e acompanhar solicitação.
-- [ ] 13.5 Testes unitários: totais, estados e grupos; integração: imutabilidade, substituição e acesso da oficina.
+- [x] 13.1 Criar rascunho de adicional com itens, quantidades, preços, justificativa, fotos e impacto no prazo.
+- [x] 13.2 Calcular totais decimais e agrupar itens dependentes.
+- [x] 13.3 Congelar versão enviada e criar substituição sem apagar decisões anteriores.
+- [x] 13.4 Criar tela para preparar, revisar, enviar e acompanhar solicitação.
+- [x] 13.5 Testes unitários: totais, estados e grupos; integração: imutabilidade, substituição e acesso da oficina.
 
 ## Critérios de aceite
 
@@ -547,7 +547,7 @@ Problema, justificativa, fotos, peças/mão de obra, quantidades, valores e impa
 
 Fluxo integrado de interface, API e persistência quando aplicável. Executar os testes indicados e registrar evidências antes de marcar como concluída.
 
-Status inicial: pendente. Não há prazo ou responsável atribuído.
+Status: concluída em 2026-09-25. Evidências em `docs/task-13-validacao.md`.
 
 ---
 
