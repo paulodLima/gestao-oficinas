@@ -286,6 +286,16 @@ S3 privado com acesso do backend; download transmitido após autorização a cad
 
 Outbox na transação da OS; worker após commit. Chave única evento/versão/destinatário/canal. Tentativas após 1, 5, 15 e 60 minutos, depois falha visível; reenvio manual preserva identificação do evento. Entrega SMTP não prova leitura. Falha externa não altera a operação salva.
 
+Tarefa 15 implementada: V14 persiste aviso interno da oficina, outbox comercial do
+cliente e histórico de tentativas. `/notificacoes` usa a identidade da oficina;
+worker `REQUIRES_NEW` com `SKIP LOCKED` e revalidação de contato sob lock. Reenvio
+manual somente de falha terminal, com cooldown. E-mail informa nome/slug da oficina
+para o fluxo por código, sem notas internas ou concessão de acesso. A deduplicação
+é persistente; SMTP permanece at-least-once na janela entre aceitação e commit.
+Contratos futuros reservados às tarefas 17/18; códigos/recuperação seguem síncronos
+(o risco temporal residual da recuperação não é resolvido pela outbox comercial).
+Detalhes e evidências: `tasks/prd-notificacoes/techspec.md` e `validacao.md`.
+
 MAIL_HOST/PORT/USERNAME/PASSWORD/FROM, STORAGE_DRIVER/BUCKET/REGION e segredo HMAC por ambiente; sem credenciais em repositório. Resend exige domínio remetente configurado. Mailpit somente local. Backups de banco e objetos coordenados, restauração antes do lançamento na tarefa 20; nenhum recurso de produção provisionado aqui.
 
 Migrações Flyway incrementais e imutáveis, inclusive tabelas Spring Session. Não aplicar scripts de teste em produção. Testes integrados usam PostgreSQL, não substituição por H2 para índices parciais/concorrrência.

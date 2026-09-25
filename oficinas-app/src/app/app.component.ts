@@ -22,7 +22,7 @@ export class AppComponent implements OnInit {
 
   private updateOfficeNavigation(url: string) {
     const path = url.split('?')[0];
-    this.showOfficeNavigation.set(['/painel', '/perfil', '/clientes', '/veiculos', '/abrir-ordem', '/inicio']
+    this.showOfficeNavigation.set(['/painel', '/perfil', '/clientes', '/veiculos', '/abrir-ordem', '/inicio', '/notificacoes']
       .some(prefix => path === prefix || path.startsWith(prefix + '/')));
   }
 }

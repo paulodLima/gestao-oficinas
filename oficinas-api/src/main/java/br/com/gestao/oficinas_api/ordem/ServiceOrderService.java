@@ -2,6 +2,8 @@ package br.com.gestao.oficinas_api.ordem;
 
 import br.com.gestao.oficinas_api.cadastro.PageResult;
 import br.com.gestao.oficinas_api.identidade.*;
+import br.com.gestao.oficinas_api.notificacoes.NotificationService;
+import br.com.gestao.oficinas_api.notificacoes.NotificationEvent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.*;
@@ -17,8 +19,9 @@ public class ServiceOrderService {
     private static final Instant MINIMUM_ENTRY = Instant.parse("2000-01-01T00:00:00Z");
     private final ServiceOrderRepository repository;
     private final Clock clock;
-    public ServiceOrderService(ServiceOrderRepository repository, Clock clock) {
-        this.repository = repository; this.clock = clock;
+    private final NotificationService notifications;
+    public ServiceOrderService(ServiceOrderRepository repository, Clock clock, NotificationService notifications) {
+        this.repository = repository; this.clock = clock; this.notifications = notifications;
     }
 
     public PageResult<ServiceOrder> orders(Identidade owner, String query, int page, int size) {
@@ -65,7 +68,9 @@ public class ServiceOrderService {
         }
         var data = new ServiceOrderRepository.CreateData(input.clienteId(), input.veiculoId(), report,
             input.entradaEm(), input.kmEntrada(), input.previsaoEm());
-        return repository.create(owner.oficinaId(), owner.id(), idempotencyKey, hash(data), data);
+        ServiceOrder result = repository.create(owner.oficinaId(), owner.id(), idempotencyKey, hash(data), data);
+        notifications.record(owner.oficinaId(), result.id(), NotificationEvent.ORDEM_ABERTA, result.id().toString());
+        return result;
     }
 
     @Transactional
@@ -130,7 +135,9 @@ public class ServiceOrderService {
         String nextAction = requiredText(input.proximaAcao(), 1000, "Informe a próxima ação.");
         var change = new ServiceOrderRepository.ForecastChange(owner.oficinaId(), owner.id(), id,
             current.previsaoEm(), input.previsao(), reason, nextAction, input.expectedVersion());
-        return repository.updateForecast(change);
+        ServiceOrder result = repository.updateForecast(change);
+        notifications.record(owner.oficinaId(), id, NotificationEvent.PREVISAO_ALTERADA, id + ":" + result.versao());
+        return result;
     }
 
     private String query(String value) {

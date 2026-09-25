@@ -39,6 +39,9 @@ app:
     code-secret: ${CODE_SECRET:development-only-secret-change-me}
   mail:
     from: ${MAIL_FROM:}
+  notifications:
+    enabled: ${APP_NOTIFICATIONS_ENABLED:true}
+    poll-ms: ${APP_NOTIFICATIONS_POLL_MS:10000}
   photos:
     storage-path: ${PHOTO_STORAGE_PATH:./data/photos}
 springdoc:

@@ -3,6 +3,8 @@ package br.com.gestao.oficinas_api.adicional;
 import br.com.gestao.oficinas_api.identidade.ApiException;
 import br.com.gestao.oficinas_api.identidade.AuthProperties;
 import br.com.gestao.oficinas_api.notificacoes.TransactionalEmail;
+import br.com.gestao.oficinas_api.notificacoes.NotificationService;
+import br.com.gestao.oficinas_api.notificacoes.NotificationEvent;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,15 +37,17 @@ public class AdditionalDecisionService {
     private final AuthProperties auth;
     private final AdditionalDecisionPolicy policy;
     private final Clock clock;
+    private final NotificationService notifications;
     private final SecureRandom random = new SecureRandom();
 
     public AdditionalDecisionService(JdbcTemplate jdbc, TransactionalEmail email, AuthProperties auth,
-                                     AdditionalDecisionPolicy policy, Clock clock) {
+                                     AdditionalDecisionPolicy policy, Clock clock, NotificationService notifications) {
         this.jdbc = jdbc;
         this.email = email;
         this.auth = auth;
         this.policy = policy;
         this.clock = clock;
+        this.notifications = notifications;
     }
 
     public List<PublicRequest> list(UUID shop, UUID customer, UUID order) {
@@ -171,6 +175,7 @@ public class AdditionalDecisionService {
              WHERE id=?
             """, state, requestId);
         Current updated = current(shop, order, requestId, false);
+        notifications.record(shop, order, NotificationEvent.DECISAO_REGISTRADA, operationId.toString());
         return publicRequest(shop, customer, order, requestId, updated.state(),
             updated.requestVersion(), updated.createdAt(), updated.updatedAt());
     }

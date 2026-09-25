@@ -20,7 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.PostgreSQLContainer;
+import br.com.gestao.oficinas_api.support.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.*;
 @Testcontainers
 class PortalAccessIntegrationTest {
     @Container
-    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+    static final TestPostgres postgres = new TestPostgres();
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -255,7 +255,7 @@ class PortalAccessIntegrationTest {
             Map.of("email", ownerEmail, "senha", PASSWORD)).statusCode());
         JsonNode me = mapper.readTree(owner.get("/api/auth/me").body());
         UUID shopId = UUID.fromString(me.get("oficina").get("id").asText());
-        String slug = me.get("oficina").get("slug").asText();
+        String slug = mapper.readTree(owner.get("/api/oficina").body()).get("slug").asText();
         String customerEmail = UUID.randomUUID() + "@customer.test";
         JsonNode customer = mapper.readTree(owner.send("POST", "/api/clientes", Map.of(
             "nome", "Cliente Portal", "cpf", cpf, "telefone", "(61) 99999-0000", "email", customerEmail)).body());
