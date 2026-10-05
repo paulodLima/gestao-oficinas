@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -671,7 +672,7 @@ class PortalAccessIntegrationTest {
         jdbc.update("UPDATE portal_desafio SET created_at=now()-interval '61 seconds' WHERE cliente_id=?", fixture.customerId());
         reset(mail);
         var response = browser.send("POST", "/api/portal/acesso/codigo",
-            Map.of("oficinaSlug", fixture.slug(), "placa", fixture.vehicleId() == null ? "" : plate(fixture.vehicleId())));
+            Map.of("oficinaSlug", fixture.slug().toUpperCase(Locale.ROOT), "placa", fixture.vehicleId() == null ? "" : plate(fixture.vehicleId())));
         // The plate is read from persistence so helpers cannot accidentally bypass office scoping.
         UUID id = UUID.fromString(mapper.readTree(response.body()).get("desafioId").asText());
         var content = ArgumentCaptor.forClass(String.class);

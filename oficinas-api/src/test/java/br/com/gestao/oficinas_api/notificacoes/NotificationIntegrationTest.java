@@ -121,7 +121,7 @@ class NotificationIntegrationTest {
         assertEquals("CANCELADO", notices().getFirst().emailEstado());
         verifyNoInteractions(email);
     }
-    @Test void emailProvidesTheCorrectShopIdentifierRequiredByThePortal() {
+    @Test void emailProvidesTheShopNameInThePortalLink() {
         open();
         Fixture other = fixture(true);
         orders.create(other.owner(), null, input(other));
@@ -129,17 +129,11 @@ class NotificationIntegrationTest {
         assertTrue(worker.processOne());
         var messages = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(email, times(2)).send(eq("client@example.test"), anyString(), messages.capture());
-        String firstSlug = "oficina-" + fixture.owner().oficinaId();
-        String secondSlug = "oficina-" + other.owner().oficinaId();
-        assertEquals(1, messages.getAllValues().stream().filter(body -> body.contains("Identificador da oficina: " + firstSlug)
-            && !body.contains(secondSlug)).count());
-        assertEquals(1, messages.getAllValues().stream().filter(body -> body.contains("Identificador da oficina: " + secondSlug)
-            && !body.contains(firstSlug)).count());
         for (String body : messages.getAllValues()) {
             assertTrue(body.contains("Oficina: Oficina Teste"));
-            assertTrue(body.contains("http://localhost:4200/acompanhar"));
+            assertTrue(body.contains("http://localhost:4200/acompanhar#oficina=Oficina+Teste"));
             assertTrue(body.contains("placa do veículo"));
-            assertFalse(body.contains("token="));
+            assertFalse(body.contains("Identificador da oficina"));
         }
     }
     @Test void concurrentWorkersDoNotDeliverSameMessage() throws Exception {

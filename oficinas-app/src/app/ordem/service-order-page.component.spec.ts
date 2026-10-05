@@ -51,17 +51,17 @@ describe('Ordens de serviço', () => {
 
   function selectFile(component: ServiceOrderPageComponent, files: File[]) {
     component.selectPhotos({ target: { files, value: 'selected' } } as unknown as Event);
+    if (component.hasPhotosToSave()) component.savePhotos();
     return new Promise(resolve => setTimeout(resolve, 0));
   }
 
-  it('repete apenas a foto com falha usando a mesma chave e a publicação original', async () => {
+  it('publica fotos ao salvar e repete apenas a foto com falha usando a mesma chave', async () => {
     const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
-    await component.load(); component.publishPhotos.setValue(true);
+    await component.load();
     service.uploadPhoto.and.resolveTo(throwError(() => new HttpErrorResponse({ status: 0 })));
     await selectFile(component, [new File(['image'], 'foto.jpg', { type: 'image/jpeg' })]);
     const entry = component.uploads()[0];
     expect(entry.error).toContain('Falha');
-    component.publishPhotos.setValue(false);
     service.uploadPhoto.and.resolveTo(of(new HttpResponse<ServicePhoto>({ status: 200 })));
     await component.retryPhoto(entry.id);
     expect(service.uploadPhoto.calls.allArgs().map(args => args[3])).toEqual([entry.id, entry.id]);
@@ -80,7 +80,7 @@ describe('Ordens de serviço', () => {
     expect(component.uploads()[0].id).not.toBe(component.uploads()[1].id);
     expect(component.uploads()[0].progress).toBe(100);
     expect(component.uploads()[1].error).toBeTruthy();
-    expect(component.uploads()[0].published).toBeFalse();
+    expect(component.uploads()[0].published).toBeTrue();
   });
 
   it('falha ao obter CSRF também permite repetir e bloqueia clique duplicado', async () => {
@@ -139,6 +139,7 @@ describe('Ordens de serviço', () => {
     service.photos.and.rejectWith(new Error('offline'));
     const fixture = TestBed.createComponent(ServiceOrderPageComponent);
     fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    fixture.componentInstance.workspaceMode.set('detail'); fixture.componentInstance.detailTab.set('fotos'); fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     const retry = Array.from(element.querySelectorAll('button')).find(button => button.textContent?.includes('Recarregar fotos'))!;
     expect(retry).toBeTruthy(); expect(retry.matches(':disabled')).toBeFalse();
@@ -166,6 +167,19 @@ describe('Ordens de serviço', () => {
     expect(component.forecasts()).toEqual([forecast]);
   });
 
+  it('mantém a busca como tela inicial e abre o detalhe somente ao selecionar uma OS', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load();
+    expect(component.workspaceMode()).toBe('search');
+
+    await component.selectOrder(order);
+    expect(component.workspaceMode()).toBe('detail');
+
+    component.backToSearch();
+    expect(component.workspaceMode()).toBe('search');
+    expect(component.selected()).toBeNull();
+  });
+
   it('impede abertura com relato e quilometragem inválidos', async () => {
     const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
     await component.load(); component.newOrder();
@@ -185,6 +199,16 @@ describe('Ordens de serviço', () => {
     expect(service.create).toHaveBeenCalledWith(jasmine.objectContaining({ clienteId: 'c1', veiculoId: 'v1', kmEntrada: 48210 }));
     expect(component.selected()).toEqual(order);
     expect(component.success()).toContain('aberta');
+  });
+
+  it('aceita quilometragem com ponto de milhar e envia o número normalizado', async () => {
+    const component = TestBed.createComponent(ServiceOrderPageComponent).componentInstance;
+    await component.load(); component.newOrder();
+    component.form.patchValue({ clienteId: 'c1', veiculoId: 'v1',
+      relatoInicial: 'Troca de para-choque dianteiro.', kmEntrada: '109.000' });
+    service.create.and.resolveTo(order);
+    await component.createOrder();
+    expect(service.create).toHaveBeenCalledWith(jasmine.objectContaining({ kmEntrada: 109000 }));
   });
 
   it('filtra veículos pelo responsável selecionado', async () => {

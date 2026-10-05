@@ -8,6 +8,7 @@ import { Location } from '@angular/common';
 
 interface PortalVehicle { id: string; placa: string; veiculo: string; }
 interface PortalOffice { nome: string; telefone: string; email: string; }
+interface PortalOfficeChoice { slug: string; nome: string; }
 interface PortalService {
   id: string; numero: number; status: string; previsaoEm: string | null;
   placa: string; veiculo: string; pendencia: string | null;
@@ -18,6 +19,9 @@ interface PortalUpdate {
   id: string; tipo: string; statusAnterior: string | null; statusNovo: string | null;
   texto: string; createdAt: string;
 }
+
+const SERVICE_FLOW = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO_PECAS',
+  'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES', 'PRONTO_PARA_RETIRADA'];
 
 @Component({
   standalone: true,
@@ -35,11 +39,14 @@ interface PortalUpdate {
           <h1 id="access-title">{{ sent() ? 'Confirme seu acesso' : 'Acompanhe seu veículo' }}</h1>
           <p class="intro">{{ sent() ? 'Informe o código enviado ao contato cadastrado.' : 'Use a oficina e a placa para solicitar um código de acesso seguro.' }}</p>
           @if (!sent()) {
-            <label for="portal-shop">Identificador da oficina</label>
-            <input id="portal-shop" [(ngModel)]="slug" placeholder="ex.: oficina-central" autocomplete="organization">
+            <label for="portal-shop">Nome da oficina</label>
+            <input id="portal-shop" [(ngModel)]="officeName" list="portal-offices" placeholder="Digite para pesquisar a oficina" autocomplete="organization">
+            <datalist id="portal-offices">
+              @for (item of offices(); track item.slug) { <option [value]="item.nome"></option> }
+            </datalist>
             <label for="portal-plate">Placa do veículo</label>
             <input id="portal-plate" [(ngModel)]="plate" placeholder="ABC1D23" autocapitalize="characters" autocomplete="off">
-            <button type="button" [disabled]="busy() || !slug.trim() || !plate.trim()" (click)="request()">{{ busy() ? 'Enviando…' : 'Receber código' }}</button>
+            <button type="button" [disabled]="busy() || !officeName.trim() || !plate.trim()" (click)="request()">{{ busy() ? 'Enviando…' : 'Receber código' }}</button>
           } @else {
             <label for="portal-code">Código de 6 dígitos</label>
             <input id="portal-code" [(ngModel)]="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
@@ -81,6 +88,25 @@ interface PortalUpdate {
                 @if (current.proximaAcao) { <p><strong>Próxima ação:</strong> {{ current.proximaAcao }}</p> }
               </div>
             }
+          </section>
+
+          <section class="gallery" aria-labelledby="progress-title">
+            <div class="section-title"><div><p class="eyebrow">ANDAMENTO DO SERVIÇO</p><h2 id="progress-title">Etapas concluídas</h2></div><span>{{ remainingSteps() }} {{ remainingSteps() === 1 ? 'etapa restante' : 'etapas restantes' }}</span></div>
+            <dl class="service-facts" style="margin-top:18px;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+              <div><dt>Etapa atual</dt><dd>{{ statusLabel(current.status) }}</dd></div>
+              <div><dt>Próxima etapa</dt><dd>{{ nextStage() ? statusLabel(nextStage()!) : 'Serviço pronto' }}</dd></div>
+              <div><dt>Concluídas</dt><dd>{{ passedStages().length }} etapa(s)</dd></div>
+            </dl>
+            <div class="portal-journey-wrap" aria-label="Linha do tempo das etapas do serviço">
+              <div class="portal-journey" [style.--journey-progress]="flowProgress() + '%'" [style.--car-progress]="carProgress() * 100 / (flowStages.length - 1) + '%'">
+                <span class="portal-journey-car" aria-hidden="true">🚗</span>
+                @for (stage of flowStages; track stage) {
+                  <div class="portal-journey-stop" [class.done]="passedStages().includes(stage)" [class.current]="current.status === stage">
+                    <i aria-hidden="true">{{ passedStages().includes(stage) ? '✓' : '•' }}</i><small>{{ statusLabel(stage) }}</small>
+                  </div>
+                }
+              </div>
+            </div>
           </section>
 
           <app-additional-decision [orderId]="current.id" />
@@ -161,7 +187,8 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
   private serviceRevision = 0;
   private accessQueue = Promise.resolve();
   private touchStartX = 0;
-  slug = '';
+  private carAnimation?: ReturnType<typeof setTimeout>;
+  officeName = '';
   plate = '';
   code = '';
   id = '';
@@ -173,6 +200,7 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
   readonly message = signal('');
   readonly vehicles = signal<PortalVehicle[]>([]);
   readonly office = signal<PortalOffice | null>(null);
+  readonly offices = signal<PortalOfficeChoice[]>([]);
   readonly service = signal<PortalService | null>(null);
   readonly photos = signal<PortalPhoto[]>([]);
   readonly updates = signal<PortalUpdate[]>([]);
@@ -185,29 +213,56 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
     ? this.orderedPhotos()
     : this.orderedPhotos().filter(photo => photo.etapa === this.selectedStage()));
   readonly activePhoto = computed(() => this.filteredPhotos().find(photo => photo.id === this.activePhotoId()) ?? null);
+  readonly flowStages = SERVICE_FLOW;
+  readonly carProgress = signal(0);
+  readonly passedStages = computed(() => {
+    const completed = new Set(this.updates().map(update => update.statusNovo).filter((stage): stage is string => !!stage));
+    const current = this.service()?.status;
+    if (current) completed.add(current);
+    return SERVICE_FLOW.filter(stage => completed.has(stage));
+  });
+  readonly remainingSteps = computed(() => {
+    const current = this.service()?.status ?? '';
+    const currentIndex = SERVICE_FLOW.indexOf(current);
+    return currentIndex < 0 ? 0 : SERVICE_FLOW.length - currentIndex - 1;
+  });
+  readonly nextStage = computed(() => {
+    const currentIndex = SERVICE_FLOW.indexOf(this.service()?.status ?? '');
+    return currentIndex < 0 ? null : SERVICE_FLOW[currentIndex + 1] ?? null;
+  });
+  readonly flowProgress = computed(() => {
+    const currentIndex = SERVICE_FLOW.indexOf(this.service()?.status ?? '');
+    return currentIndex < 0 ? 0 : Math.round(currentIndex * 100 / (SERVICE_FLOW.length - 1));
+  });
 
   async ngOnInit() {
+    void this.loadOffices();
     this.navigation = this.router.events.subscribe(event => {
       if (!(event instanceof NavigationEnd) && !(event instanceof NavigationSkipped)) return;
       const url = new URL(this.location.path(true), 'https://portal.invalid');
-      const token = new URLSearchParams(url.hash.slice(1)).get('token') ?? url.searchParams.get('token');
-      if (token !== null) void this.consumeLink(token);
+      const fragment = new URLSearchParams(url.hash.slice(1));
+      const token = fragment.get('token') ?? url.searchParams.get('token');
+      if (token !== null) void this.consumeLink(token, fragment.get('oficina') ?? url.searchParams.get('oficina'));
     });
     const fragment = new URLSearchParams(this.route.snapshot.fragment ?? '');
     const token = fragment.get('token') ?? this.route.snapshot.queryParamMap.get('token');
+    const officeName = fragment.get('oficina') ?? this.route.snapshot.queryParamMap.get('oficina');
+    if (officeName?.trim()) this.officeName = officeName.trim();
     if (token === null) { await this.restoreSession(); return; }
-    await this.consumeLink(token);
+    await this.consumeLink(token, officeName);
   }
 
-  ngOnDestroy() { this.navigation?.unsubscribe(); this.contextRevision++; }
+  ngOnDestroy() { this.navigation?.unsubscribe(); this.contextRevision++; if (this.carAnimation) clearTimeout(this.carAnimation); }
 
-  private consumeLink(token: string) {
+  private consumeLink(token: string, officeName: string | null = null) {
     const revision = ++this.contextRevision;
     this.location.replaceState('/acompanhar');
+    if (officeName?.trim()) this.officeName = officeName.trim();
     this.authenticated.set(false);
     this.vehicles.set([]);
     this.office.set(null);
     this.service.set(null);
+    this.carProgress.set(0);
     this.photos.set([]);
     this.updates.set([]);
     this.closePhoto();
@@ -257,9 +312,15 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
   async request() {
     this.busy.set(true);
     this.message.set('');
+    const office = this.findOffice(this.officeName);
+    if (!office) {
+      this.busy.set(false);
+      this.message.set('Selecione uma oficina da lista para continuar.');
+      return;
+    }
     try {
       const result = await firstValueFrom(this.http.post<{ desafioId?: string }>(
-        '/api/portal/acesso/codigo', { oficinaSlug: this.slug.trim(), placa: this.plate.trim() },
+        '/api/portal/acesso/codigo', { oficinaSlug: office.slug, placa: this.plate.trim() },
         { headers: await this.headers() }));
       this.id = result.desafioId ?? '';
       this.sent.set(true);
@@ -297,6 +358,7 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
     this.loadingPortal.set(true);
     this.message.set('');
     this.service.set(null);
+    this.carProgress.set(0);
     this.photos.set([]);
     this.updates.set([]);
     this.selectedVehicleId = vehicleId || this.selectedVehicleId;
@@ -310,6 +372,7 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
       if (!current()) return;
       this.office.set(result.oficina);
       this.service.set(result.servico);
+      this.animateCar(result.servico?.status ?? '');
       if (!result.servico) {
         this.photos.set([]);
         this.updates.set([]);
@@ -382,10 +445,42 @@ export class PortalAccessComponent implements OnInit, OnDestroy {
     this.activePhotoId.set(photos[next].id);
   }
 
+  private async loadOffices() {
+    try {
+      const offices = await firstValueFrom(this.http.get<PortalOfficeChoice[]>('/api/portal/oficinas'));
+      this.offices.set(offices);
+    } catch {
+      this.message.set('Não foi possível carregar a lista de oficinas. Tente novamente.');
+    }
+  }
+
+  private findOffice(value: string) {
+    const normalized = this.normalize(value);
+    return this.offices().find(item => this.normalize(item.nome) === normalized || this.normalize(item.slug) === normalized);
+  }
+
+  private normalize(value: string) {
+    return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+  }
+
+  private animateCar(status: string) {
+    if (this.carAnimation) clearTimeout(this.carAnimation);
+    const destination = SERVICE_FLOW.indexOf(status);
+    this.carProgress.set(0);
+    const advance = () => {
+      const next = this.carProgress() + 1;
+      if (next > destination) return;
+      this.carProgress.set(next);
+      if (next < destination) this.carAnimation = setTimeout(advance, 260);
+    };
+    if (destination > 0) this.carAnimation = setTimeout(advance, 180);
+  }
+
   private expireAccess() {
     this.authenticated.set(false);
     this.sent.set(false);
     this.service.set(null);
+    this.carProgress.set(0);
     this.photos.set([]);
     this.updates.set([]);
     this.message.set('Seu acesso expirou. Solicite um novo código para continuar.');

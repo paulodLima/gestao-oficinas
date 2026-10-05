@@ -45,8 +45,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(a->a
                 .requestMatchers("/api/auth/csrf","/api/auth/cadastro","/api/auth/login",
                     "/api/auth/recuperacao","/api/auth/redefinicao","/api/portal/**").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/publico/oficinas/*", "/api/publico/oficinas/*/logo").permitAll()
-                .requestMatchers("/api/painel","/api/auth/me","/api/auth/logout","/api/oficina","/api/oficina/logo",
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/publico/oficinas/*", "/api/publico/oficinas/*/logo", "/api/publico/oficinas/*/identidade", "/api/publico/oficinas/*/capa").permitAll()
+                .requestMatchers("/api/painel","/api/auth/me","/api/auth/logout","/api/oficina","/api/oficina/**",
                     "/api/clientes/**","/api/veiculos/**","/api/ordens-servico/**","/api/notificacoes/**","/api/avaliacoes/**").hasRole("PROPRIETARIO")
                 .anyRequest().denyAll())
             .exceptionHandling(e->e

@@ -12,8 +12,10 @@ import { ReviewInvitationComponent } from '../avaliacao/review-invitation.compon
 
 interface PhotoUpload {
   id: string; orderId: string; stage: ServiceOrderStatus; file: File | null;
-  name: string; progress: number; error: string; pending: boolean; published: boolean;
+  name: string; previewUrl: string; progress: number; error: string; pending: boolean; published: boolean;
 }
+
+type OrderTab = 'detalhe' | 'fluxo' | 'comunicar' | 'prazo' | 'adicionais' | 'fotos' | 'vistoria';
 
 const ACTIVE_STATUSES: ServiceOrderStatus[] = ['RECEBIDO', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO',
   'AGUARDANDO_PECAS', 'EM_MANUTENCAO', 'FUNILARIA', 'PINTURA', 'EM_MONTAGEM', 'EM_TESTES',
@@ -23,6 +25,12 @@ const STATUS_SEQUENCE: Record<ServiceOrderStatus, number> = {
   RECEBIDO: 0, EM_DIAGNOSTICO: 10, AGUARDANDO_APROVACAO: 20, AGUARDANDO_PECAS: 30,
   EM_MANUTENCAO: 40, FUNILARIA: 42, PINTURA: 44, EM_MONTAGEM: 50, EM_TESTES: 60,
   PRONTO_PARA_RETIRADA: 70, ENTREGUE: 100, CANCELADO: 100
+};
+const NEXT_STATUS: Partial<Record<ServiceOrderStatus, ServiceOrderStatus>> = {
+  RECEBIDO: 'EM_DIAGNOSTICO', EM_DIAGNOSTICO: 'AGUARDANDO_APROVACAO',
+  AGUARDANDO_APROVACAO: 'AGUARDANDO_PECAS', AGUARDANDO_PECAS: 'EM_MANUTENCAO',
+  EM_MANUTENCAO: 'EM_TESTES', FUNILARIA: 'PINTURA', PINTURA: 'EM_MONTAGEM',
+  EM_MONTAGEM: 'EM_TESTES', EM_TESTES: 'PRONTO_PARA_RETIRADA'
 };
 
 @Component({
@@ -42,13 +50,16 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly customers = signal<Customer[]>([]);
   readonly vehicles = signal<Vehicle[]>([]);
   readonly selected = signal<ServiceOrder | null>(null);
+  readonly workspaceMode = signal<'search' | 'detail' | 'new'>('search');
+  readonly detailTab = signal<OrderTab>('detalhe');
   readonly timeline = signal<ServiceOrderEvent[]>([]);
   readonly forecasts = signal<ServiceOrderForecast[]>([]);
   readonly photos = signal<ServicePhoto[]>([]);
   readonly uploads = signal<PhotoUpload[]>([]);
   readonly selectedUploads = computed(() => this.uploads().filter(item => item.orderId === this.selected()?.id));
+  readonly pendingPhotoUploads = computed(() => this.selectedUploads().filter(item => !!item.file));
+  readonly hasPhotosToSave = computed(() => this.selectedUploads().some(item => !!item.file && !item.pending));
   readonly photosError = signal('');
-  readonly publishPhotos = this.builder.nonNullable.control(false);
   readonly inspections = signal<Inspection[]>([]);
   readonly correctingInspection = signal(false);
   readonly hasInspectionDraft = computed(() => this.inspections().some(item => item.estado === 'RASCUNHO'));
@@ -59,6 +70,7 @@ export class ServiceOrderPageComponent implements OnInit {
   readonly success = signal('');
   readonly search = this.builder.nonNullable.control('', Validators.maxLength(100));
   readonly statusOptions = ACTIVE_STATUSES;
+  readonly maxEntryDate = this.localDateTime(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
   readonly activeCount = computed(() => this.orders().filter(item => !['ENTREGUE', 'CANCELADO'].includes(item.status)).length);
   availableVehicles() {
     const customerId = this.form.controls.clienteId.value;
@@ -69,7 +81,7 @@ export class ServiceOrderPageComponent implements OnInit {
     veiculoId: ['', Validators.required],
     relatoInicial: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(2000)]],
     entradaEm: [this.localDateTime(new Date()), Validators.required],
-    kmEntrada: ['', [Validators.required, Validators.pattern(/^\d{1,7}$/)]],
+    kmEntrada: ['', [Validators.required, Validators.pattern(/^(?:\d{1,7}|\d{1,3}(?:\.\d{3}){1,2})$/)]],
     previsaoEm: ['']
   });
   readonly statusForm = this.builder.nonNullable.group({
@@ -108,9 +120,22 @@ export class ServiceOrderPageComponent implements OnInit {
         this.service.orders(), this.registrations.customers(), this.registrations.vehicles()
       ]);
       this.orders.set(orders.items); this.customers.set(customers.items); this.vehicles.set(vehicles.items);
+      const vehicleId = this.route.snapshot.queryParamMap.get('veiculoId');
+      if (this.route.snapshot.queryParamMap.get('novo') === '1' && vehicleId) {
+        this.newOrder();
+        const vehicle = await this.registrations.vehicle(vehicleId);
+        const customer = await this.registrations.customer(vehicle.clienteId);
+        if (!customer.ativo) { this.error.set('O responsável está inativo. Confira o cadastro antes de abrir a ordem.'); return; }
+        this.customers.update(items => [customer, ...items.filter(item => item.id !== customer.id)]);
+        this.vehicles.update(items => [vehicle, ...items.filter(item => item.id !== vehicle.id)]);
+        this.form.patchValue({ clienteId: customer.id, veiculoId: vehicle.id });
+        return;
+      }
       const requestedId = this.route.snapshot.queryParamMap.get('id');
       const first = requestedId ? await this.service.order(requestedId) : orders.items[0] ?? null;
       this.selected.set(first);
+      this.workspaceMode.set(requestedId && first ? 'detail' : 'search');
+      this.resetWorkflowForms();
       if (first) { await this.loadHistory(first.id); await this.loadPhotos(first.id); await this.loadInspection(first.id); }
     } catch (error) { this.showError(error, 'Não foi possível carregar as ordens de serviço.'); }
     finally { this.loading.set(false); }
@@ -118,12 +143,20 @@ export class ServiceOrderPageComponent implements OnInit {
   newOrder() {
     this.resetPhotoView();
     this.selected.set(null); this.timeline.set([]); this.forecasts.set([]); this.clearMessages();
+    this.workspaceMode.set('new'); this.detailTab.set('detalhe');
     this.form.reset({ clienteId: '', veiculoId: '', relatoInicial: '',
       entradaEm: this.localDateTime(new Date()), kmEntrada: '', previsaoEm: '' });
   }
   syncVehicle() {
     const vehicle = this.vehicles().find(item => item.id === this.form.controls.veiculoId.value);
     if (vehicle?.clienteId !== this.form.controls.clienteId.value) this.form.controls.veiculoId.reset('');
+  }
+  backToSearch() {
+    this.selected.set(null); this.workspaceMode.set('search'); this.detailTab.set('detalhe'); this.resetPhotoView(); this.clearMessages();
+  }
+  formatMileage() {
+    const digits = this.form.controls.kmEntrada.value.replace(/\D/g, '').slice(0, 7);
+    this.form.controls.kmEntrada.setValue(digits ? Number(digits).toLocaleString('pt-BR') : '', { emitEvent: false });
   }
   isActive(order: ServiceOrder) { return !['ENTREGUE', 'CANCELADO'].includes(order.status); }
   async orderClosed(order: ServiceOrder) {
@@ -163,16 +196,15 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const result = await this.service.orders(this.search.value);
       this.resetPhotoView();
-      this.orders.set(result.items); this.selected.set(result.items[0] ?? null);
+      this.orders.set(result.items); this.selected.set(result.items[0] ?? null); this.workspaceMode.set('search');
       this.resetWorkflowForms(); this.timeline.set([]); this.forecasts.set([]);
-      if (this.selected()) { await this.loadHistory(this.selected()!.id); await this.loadPhotos(this.selected()!.id); }
     }, 'Busca atualizada.');
   }
   async selectOrder(order: ServiceOrder) {
     await this.perform(async () => {
       const detail = await this.service.order(order.id);
       this.resetPhotoView();
-      this.selected.set(detail); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id); await this.loadInspection(detail.id);
+      this.selected.set(detail); this.workspaceMode.set('detail'); this.detailTab.set('detalhe'); this.resetWorkflowForms(); await this.loadHistory(detail.id); await this.loadPhotos(detail.id); await this.loadInspection(detail.id);
     }, 'Detalhes atualizados.');
   }
   async createOrder() {
@@ -181,13 +213,13 @@ export class ServiceOrderPageComponent implements OnInit {
     const value = this.form.getRawValue();
     const input: ServiceOrderInput = {
       clienteId: value.clienteId, veiculoId: value.veiculoId, relatoInicial: value.relatoInicial,
-      entradaEm: new Date(value.entradaEm).toISOString(), kmEntrada: Number(value.kmEntrada),
+      entradaEm: new Date(value.entradaEm).toISOString(), kmEntrada: Number(value.kmEntrada.replace(/\./g, '')),
       previsaoEm: value.previsaoEm ? new Date(value.previsaoEm).toISOString() : null
     };
     await this.perform(async () => {
       const opened = await this.service.create(input);
       this.resetPhotoView();
-      this.orders.update(items => [opened, ...items]); this.selected.set(opened);
+      this.orders.update(items => [opened, ...items]); this.selected.set(opened); this.workspaceMode.set('detail'); this.detailTab.set('detalhe');
       this.resetWorkflowForms(); await this.loadHistory(opened.id); await this.loadPhotos(opened.id); await this.loadInspection(opened.id);
     }, 'Ordem de serviço aberta com sucesso.');
   }
@@ -202,7 +234,7 @@ export class ServiceOrderPageComponent implements OnInit {
     await this.perform(async () => {
       const updated = await this.service.changeStatus(order.id, { ...value,
         status: value.status as ServiceOrderStatus, expectedVersion: order.versao });
-      this.replaceOrder(updated); this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });
+      this.replaceOrder(updated); this.statusForm.reset({ status: this.nextStatus(updated) ?? '', motivo: '', textoPublico: '', textoInterno: '' });
       await this.loadHistory(order.id);
     }, 'Etapa atualizada e registrada na linha do tempo.');
   }
@@ -293,8 +325,14 @@ export class ServiceOrderPageComponent implements OnInit {
     if (!order || !this.isActive(order) || !files.length) return;
     if (files.some(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024)) { this.error.set('Selecione JPEG, PNG ou WebP de até 10 MiB por foto.'); return; }
     const entries = files.map(file => ({ id: crypto.randomUUID(), orderId: order.id, stage: order.status,
-      file, name: file.name, progress: 0, error: '', pending: true, published: this.publishPhotos.value }));
+      file, name: file.name, previewUrl: URL.createObjectURL(file), progress: 0, error: '', pending: false, published: true }));
     this.uploads.update(items => [...items.filter(item => item.file), ...entries]);
+    this.success.set(`${entries.length} foto(s) selecionada(s). Revise a prévia e clique em “Salvar fotos” para publicar.`);
+  }
+  savePhotos() {
+    const entries = this.selectedUploads().filter(item => item.file && !item.pending);
+    if (!entries.length) { this.error.set('Selecione ao menos uma foto antes de salvar.'); return; }
+    entries.forEach(entry => this.setUpload(entry.id, { pending: true, error: '', progress: 0 }));
     void this.uploadQueue(entries);
   }
   private async uploadQueue(entries: PhotoUpload[]) {
@@ -361,6 +399,7 @@ export class ServiceOrderPageComponent implements OnInit {
   statusLabel(value: ServiceOrderStatus) {
     return value.toLowerCase().replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
   }
+  nextStatus(order: ServiceOrder) { return NEXT_STATUS[order.status] ?? null; }
   deadlineLabel(order: ServiceOrder) {
     if (!this.isActive(order)) return 'Encerrada · histórico interno';
     if (order.aguardandoRetirada) return 'Pronto · aguardando retirada';
@@ -423,10 +462,10 @@ export class ServiceOrderPageComponent implements OnInit {
     this.orders.update(items => items.map(item => item.id === order.id ? order : item));
   }
   private resetPhotoView() {
-    this.photos.set([]); this.photosError.set(''); this.publishPhotos.setValue(false);
+    this.photos.set([]); this.photosError.set('');
   }
   private resetWorkflowForms() {
-    this.statusForm.reset({ status: '', motivo: '', textoPublico: '', textoInterno: '' });
+    this.statusForm.reset({ status: this.selected() ? this.nextStatus(this.selected()!) ?? '' : '', motivo: '', textoPublico: '', textoInterno: '' });
     this.updateForm.reset({ textoPublico: '', textoInterno: '', publicada: false });
     this.forecastForm.reset({ previsaoEm: '', semPrevisao: false, motivoPublico: '', proximaAcao: '' });
   }

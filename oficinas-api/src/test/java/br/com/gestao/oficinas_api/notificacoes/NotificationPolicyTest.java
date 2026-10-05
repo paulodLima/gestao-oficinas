@@ -5,11 +5,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
-import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class NotificationPolicyTest {
     @Test void selectsOnlyActiveVerifiedRecipients() {
@@ -28,14 +24,12 @@ class NotificationPolicyTest {
         assertThrows(IllegalArgumentException.class, () -> NotificationWorker.retryDelay(5));
     }
     @Test void missingProviderNeverPretendsSuccess() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        assertThrows(ApiException.class, () -> new TransactionalEmail(sender, "")
+        assertThrows(ApiException.class, () -> new TransactionalEmail("", "localhost", 1, "", "", false, false, "http://localhost:4200")
             .send("client@example.test", "Aviso", "Mensagem"));
-        verifyNoInteractions(sender);
-        doThrow(new MailSendException("private-provider-detail")).when(sender).send(any(SimpleMailMessage.class));
-        ApiException error = assertThrows(ApiException.class, () -> new TransactionalEmail(sender, "office@example.test")
+        ApiException error = assertThrows(ApiException.class, () -> new TransactionalEmail(
+                "office@example.test", "localhost", 1, "", "", false, false, "http://localhost:4200")
             .send("client@example.test", "Aviso", "Mensagem"));
-        assertFalse(error.getMessage().contains("private-provider-detail"));
+        assertFalse(error.getMessage().contains("Connection refused"));
     }
     @Test void templatesContainOnlyAllowlistedContent() {
         assertEquals(7, NotificationEvent.values().length);

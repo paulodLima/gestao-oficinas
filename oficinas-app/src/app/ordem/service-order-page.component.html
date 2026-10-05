@@ -1,6 +1,6 @@
 <main>
   <section class="hero">
-    <div><p class="eyebrow">OPERAÇÃO / ORDENS DE SERVIÇO</p><h1>Da entrada ao diagnóstico,<br>sem perder o contexto.</h1>
+    <div><h1>Ordens de serviço</h1>
       <p class="intro">Abra o atendimento com o responsável correto e encontre cada OS por número, cliente ou placa.</p></div>
     <div class="summary" aria-label="Resumo das ordens"><span><strong>{{ orders().length }}</strong> na busca</span><span><strong>{{ activeCount() }}</strong> ativas</span></div>
   </section>
@@ -10,8 +10,9 @@
   @if (loading()) { <p role="status" class="loading">Carregando ordens de serviço…</p> }
 
   @if (!loading()) {
-    <section class="workspace" aria-label="Ordens de serviço">
-      <div class="directory">
+    <section class="workspace" [class.focused]="workspaceMode() !== 'search'" [class.searching]="workspaceMode() === 'search'" aria-label="Ordens de serviço">
+      @if (workspaceMode() === 'search') {
+      <div class="directory search-stage">
         <div class="section-heading"><div><p class="step">01 / LOCALIZAR</p><h2>Atendimentos</h2></div>
           <button type="button" class="secondary" (click)="newOrder()">Nova ordem</button></div>
         <form class="search" (submit)="$event.preventDefault(); searchOrders()">
@@ -31,9 +32,22 @@
           }
         </div>
       </div>
+      } @else {
 
-      <aside class="editor">
+      <aside class="editor order-focus">
+        <div class="focus-nav"><button type="button" class="back-button" (click)="backToSearch()"><span aria-hidden="true">←</span> Buscar ordem de serviço</button>
+          <button type="button" class="secondary" (click)="newOrder()">Nova ordem</button></div>
         @if (selected(); as order) {
+          <nav class="order-tabs" aria-label="Seções da ordem de serviço">
+            <button type="button" [class.active]="detailTab() === 'detalhe'" [attr.aria-current]="detailTab() === 'detalhe' ? 'page' : null" (click)="detailTab.set('detalhe')">Detalhe</button>
+            <button type="button" [class.active]="detailTab() === 'fluxo'" [attr.aria-current]="detailTab() === 'fluxo' ? 'page' : null" (click)="detailTab.set('fluxo')">Fluxo</button>
+            <button type="button" [class.active]="detailTab() === 'comunicar'" [attr.aria-current]="detailTab() === 'comunicar' ? 'page' : null" (click)="detailTab.set('comunicar')">Comunicar</button>
+            <button type="button" [class.active]="detailTab() === 'prazo'" [attr.aria-current]="detailTab() === 'prazo' ? 'page' : null" (click)="detailTab.set('prazo')">Prazo</button>
+            <button type="button" [class.active]="detailTab() === 'adicionais'" [attr.aria-current]="detailTab() === 'adicionais' ? 'page' : null" (click)="detailTab.set('adicionais')">Adicionais</button>
+            <button type="button" [class.active]="detailTab() === 'fotos'" [attr.aria-current]="detailTab() === 'fotos' ? 'page' : null" (click)="detailTab.set('fotos')">Fotos</button>
+            <button type="button" [class.active]="detailTab() === 'vistoria'" [attr.aria-current]="detailTab() === 'vistoria' ? 'page' : null" (click)="detailTab.set('vistoria')">Vistoria</button>
+          </nav>
+          @if (detailTab() === 'detalhe') {
           <p class="step">02 / DETALHE</p><div class="detail-heading"><h2>{{ formatNumber(order.numero) }}</h2><span class="status">{{ statusLabel(order.status) }}</span></div>
           <div class="vehicle"><span class="plate">{{ formatPlate(order.placa) }}</span><div><strong>{{ order.veiculo }}</strong><small>{{ order.clienteNome }}</small></div></div>
           <dl><div><dt>Entrada</dt><dd>{{ formatDate(order.entradaEm) }}</dd></div><div><dt>Quilometragem</dt><dd>{{ order.kmEntrada.toLocaleString('pt-BR') }} km</dd></div>
@@ -43,14 +57,17 @@
           <app-order-share [order]="order" />
           <app-order-closure [order]="order" (closed)="orderClosed($event)" (returnVisit)="returnVisit($event)" />
           @if (order.status === 'ENTREGUE') { <app-review-invitation [orderId]="order.id" /> }
+          }
           <fieldset [disabled]="!isActive(order)" aria-label="Operação e histórico da OS">
+          @if (detailTab() === 'fluxo') {
           <section class="workflow" aria-labelledby="workflow-title">
             <div class="subheading"><div><p class="step">03 / FLUXO</p><h3 id="workflow-title">Atualizar etapa</h3></div>
               <span class="version">versão {{ order.versao }}</span></div>
+            <div class="vehicle" aria-label="Etapas do fluxo"><div><small>Etapa atual</small><strong>{{ statusLabel(order.status) }}</strong></div><span aria-hidden="true">→</span><div><small>Próxima sugerida</small><strong>{{ nextStatus(order) ? statusLabel(nextStatus(order)!) : 'Sem próxima etapa' }}</strong></div></div>
             <p class="hint">Etapas podem ser puladas. Retornos e esperas após execução exigem motivo.</p>
             <form [formGroup]="statusForm" (ngSubmit)="changeStatus()">
               <fieldset [disabled]="busy()">
-                <label for="order-status">Nova etapa *</label>
+                <label for="order-status">Próxima etapa *</label>
                 <select id="order-status" formControlName="status"><option value="">Selecione</option>
                   @for (status of statusOptions; track status) { @if (status !== order.status) { <option [value]="status">{{ statusLabel(status) }}</option> } }
                 </select>
@@ -65,9 +82,11 @@
               </fieldset>
             </form>
           </section>
+          }
 
-          <section class="workflow" aria-labelledby="update-title">
-            <p class="step">04 / COMUNICAR</p><h3 id="update-title">Registrar sem mudar etapa</h3>
+          @if (detailTab() === 'comunicar') {
+          <section class="workflow" style="margin-top:0;padding-top:0;border:0" aria-labelledby="update-title">
+            <h3 id="update-title">Registrar sem mudar etapa</h3>
             <form [formGroup]="updateForm" (ngSubmit)="publishUpdate()">
               <fieldset [disabled]="busy()">
                 <label for="update-public">Texto público</label>
@@ -80,9 +99,11 @@
               </fieldset>
             </form>
           </section>
+          }
 
-          <section class="workflow timeline" aria-labelledby="forecast-title">
-            <div class="subheading"><div><p class="step">05 / PRAZO</p><h3 id="forecast-title">Revisar previsão</h3></div>
+          @if (detailTab() === 'prazo') {
+          <section class="workflow timeline" style="margin-top:0;padding-top:0;border:0" aria-labelledby="forecast-title">
+            <div class="subheading"><div><h3 id="forecast-title">Revisar previsão</h3></div>
               <span class="version">estimativa</span></div>
             <p class="hint">Toda alteração fica no histórico público, inclusive quando ainda não houver uma nova data.</p>
             <form [formGroup]="forecastForm" (ngSubmit)="updateForecast()">
@@ -108,9 +129,13 @@
               </ol>
             }
           </section>
+          }
 
+          @if (detailTab() === 'adicionais') {
           <app-additional-request [order]="order" [photos]="photos()"></app-additional-request>
+          }
 
+          @if (detailTab() === 'fluxo') {
           <section class="timeline" aria-labelledby="timeline-title">
             <p class="step">06 / HISTÓRICO</p><h3 id="timeline-title">Linha do tempo</h3>
             @if (!timeline().length) { <p class="hint">Nenhum evento registrado.</p> }
@@ -126,18 +151,23 @@
               }
             </ol>
           </section>
+          }
           </fieldset>
-          <section class="workflow photos" aria-labelledby="photos-title">
-            <div class="subheading"><div><p class="step">06 / FOTOS</p><h3 id="photos-title">Acompanhamento visual</h3></div><span class="version">privadas por padrão</span></div>
+          @if (detailTab() === 'fotos') {
+          <section class="workflow photos" style="margin-top:0;padding-top:0;border:0" aria-labelledby="photos-title">
+            <div class="subheading"><div><h3 id="photos-title">Acompanhamento visual</h3></div><span class="version">publicadas ao salvar</span></div>
             <fieldset [disabled]="!isActive(order)" aria-label="Enviar fotos">
-            <p class="hint">Use a câmera ou a galeria. Se a câmera não abrir ou a permissão for negada, escolha da galeria. Use JPEG, PNG ou WebP; para HEIC, exporte em JPEG. As fotos ficam privadas, exceto quando você marcar a publicação abaixo antes de selecionar.</p>
-            <label class="check"><input type="checkbox" [formControl]="publishPhotos"> Publicar novas fotos no portal do cliente</label>
+            <p class="hint">Use a câmera ou a galeria. Se a câmera não abrir ou a permissão for negada, escolha da galeria. Use JPEG, PNG ou WebP; para HEIC, exporte em JPEG. Revise as prévias e salve para publicar no acompanhamento do cliente.</p>
             <div class="inspection-actions"><label class="photo-picker" for="order-camera">Usar câmera<input id="order-camera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" (change)="selectPhotos($event)"></label><label class="photo-picker" for="order-gallery">Escolher da galeria<input id="order-gallery" type="file" accept="image/jpeg,image/png,image/webp" multiple (change)="selectPhotos($event)"></label></div>
             @if (selectedUploads().length) { <ul class="upload-list" aria-live="polite">@for (upload of selectedUploads(); track upload.id) { <li><span>{{ upload.name }}</span><progress [attr.aria-label]="'Envio de ' + upload.name" [value]="upload.progress" max="100">{{ upload.progress }}%</progress>@if (upload.error) { <small class="field-error" role="alert">{{ upload.error }}</small><button type="button" (click)="retryPhoto(upload.id)" [disabled]="upload.pending">Tentar novamente: {{ upload.name }}</button> }</li> }</ul> }
             </fieldset>
             @if (photosError()) { <p role="alert" class="field-error">{{ photosError() }}</p><button type="button" (click)="reloadPhotos()">Recarregar fotos</button> }
-            @if (photos().length) { <div class="photo-grid">@for (photo of photos(); track photo.id) { <figure><img [src]="photoUrl(photo)" [alt]="photo.legenda || 'Foto da etapa ' + statusLabel(photo.etapa)"><figcaption><span>{{ statusLabel(photo.etapa) }} · {{ formatDate(photo.createdAt) }}</span><button type="button" class="link-danger" [disabled]="!isActive(order)" (click)="removePhoto(photo)">Remover</button></figcaption></figure> }</div> } @else { <p class="hint">Nenhuma foto registrada nesta ordem.</p> }
+            @if (pendingPhotoUploads().length) { <div class="photo-grid" aria-label="Prévia das fotos selecionadas">@for (upload of pendingPhotoUploads(); track upload.id) { <figure><img [src]="upload.previewUrl" [alt]="'Prévia de ' + upload.name"><figcaption><span>{{ upload.name }}</span><small>Pronta para publicar</small></figcaption></figure> }</div> }
+            @if (photos().length) { <div class="photo-grid">@for (photo of photos(); track photo.id) { <figure><img [src]="photoUrl(photo)" [alt]="photo.legenda || 'Foto da etapa ' + statusLabel(photo.etapa)"><figcaption><span>{{ statusLabel(photo.etapa) }} · {{ formatDate(photo.createdAt) }}</span><button type="button" class="link-danger" [disabled]="!isActive(order)" (click)="removePhoto(photo)">Remover</button></figcaption></figure> }</div> } @else if (!pendingPhotoUploads().length) { <p class="hint">Nenhuma foto registrada nesta ordem.</p> }
+            <button type="button" class="primary full" [disabled]="busy() || !hasPhotosToSave()" (click)="savePhotos()">Salvar fotos</button>
           </section>
+          }
+          @if (detailTab() === 'vistoria') {
           <fieldset [disabled]="!isActive(order)" aria-label="Editar vistoria">
           <section class="workflow inspection" aria-labelledby="inspection-title">
             <div class="subheading"><div><p class="step">07 / VISTORIA</p><h3 id="inspection-title">Entrada do veículo</h3></div><span class="version">rascunho seguro</span></div>
@@ -149,9 +179,10 @@
             @if (inspections().length) { <div class="inspection-history"><p class="hint">{{ inspections().length }} versão(ões) preservada(s).</p>@for (item of inspections(); track item.id) { <article><strong>Versão {{ item.numeroVersao }} · {{ item.estado === 'CONFIRMADA' ? 'Confirmada' : 'Rascunho' }}</strong><small>{{ formatDate(item.updatedAt) }}@if (item.motivoCorrecao) { · {{ item.motivoCorrecao }} }</small></article> } @if (!hasInspectionDraft()) { <button type="button" class="secondary full" (click)="beginCorrection()">Corrigir vistoria confirmada</button> }</div> }
           </section>
           </fieldset>
+          }
           <button type="button" class="secondary full" (click)="newOrder()">Abrir outra ordem</button>
         } @else {
-          <p class="step">02 / ABRIR</p><h2>Nova ordem de serviço</h2>
+          <p class="step">01 / ABRIR</p><h2>Nova ordem de serviço</h2>
           @if (!customers().length || !vehicles().length) { <p class="notice warning">Cadastre um cliente e um veículo antes de abrir o atendimento.</p> }
           <form [formGroup]="form" (ngSubmit)="createOrder()">
             <fieldset [disabled]="busy() || !customers().length || !vehicles().length">
@@ -166,8 +197,9 @@
               <label for="order-report">Relato inicial *</label>
               <textarea id="order-report" formControlName="relatoInicial" rows="5" maxlength="2000" placeholder="Descreva o motivo da entrada e os sintomas relatados."></textarea>
               @if (form.controls.relatoInicial.touched && form.controls.relatoInicial.invalid) { <small class="field-error">Informe ao menos 10 caracteres.</small> }
-              <div class="pair"><div><label for="order-entry">Data e hora de entrada *</label><input id="order-entry" type="datetime-local" formControlName="entradaEm"></div>
-                <div><label for="order-mileage">Quilometragem *</label><input id="order-mileage" inputmode="numeric" formControlName="kmEntrada" maxlength="7" placeholder="48210"></div></div>
+              <div class="pair"><div><label for="order-entry">Data e hora de entrada *</label><input id="order-entry" type="datetime-local" formControlName="entradaEm" [max]="maxEntryDate"></div>
+                <div><label for="order-mileage">Quilometragem *</label><input id="order-mileage" inputmode="numeric" formControlName="kmEntrada" maxlength="9" placeholder="109.000" (input)="formatMileage()">
+                  @if (form.controls.kmEntrada.touched && form.controls.kmEntrada.invalid) { <small class="field-error">Informe até 9.999.999 km.</small> }</div></div>
               <label for="order-forecast">Previsão inicial</label><input id="order-forecast" type="datetime-local" formControlName="previsaoEm">
               <p class="hint">A previsão é uma estimativa e poderá ser atualizada com motivo nas próximas etapas.</p>
               <button type="submit" class="primary">{{ busy() ? 'Abrindo…' : 'Abrir ordem de serviço' }}</button>
@@ -175,6 +207,7 @@
           </form>
         }
       </aside>
+      }
     </section>
   }
 </main>

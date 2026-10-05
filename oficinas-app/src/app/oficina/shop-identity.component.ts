@@ -11,12 +11,23 @@ import { PublicProfile } from './shop.service';
     <dl><dt>Contato</dt><dd>{{ profile().telefone || 'Telefone não informado' }}</dd>
       @if (profile().emailContato) { <dd>{{ profile().emailContato }}</dd> }
       <dt>Onde estamos</dt><dd>{{ profile().endereco || 'Endereço não informado' }}</dd>
-      <dt>Atendimento</dt><dd>{{ profile().horario || 'Consulte a oficina sobre os horários' }}</dd>
-      <dt>Fuso horário</dt><dd>{{ profile().fuso }}</dd></dl>
+      <dt>Atendimento</dt><dd>{{ hours() || 'Consulte a oficina sobre os horários' }}</dd></dl>
     </article>`,
   styles: [`article{overflow-wrap:anywhere;padding:28px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}img,.monogram{width:76px;height:76px;margin-bottom:20px;border-radius:12px;object-fit:contain}.monogram{display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);font-size:32px;font-weight:800}.eyebrow{margin:0;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.1em}h2{margin:8px 0 24px;color:var(--ink);font-size:30px;letter-spacing:-.035em}dl{margin:0;border-top:1px solid var(--line)}dt{margin-top:18px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}dd{margin:5px 0;white-space:pre-line;line-height:1.55}@media(max-width:400px){article{padding:20px}h2{font-size:25px}}`]
 })
 export class ShopIdentityComponent {
   readonly profile = input.required<PublicProfile>();
   readonly imageFailed = signal(false);
+  hours() {
+    const labels: Record<string, string> = { segunda: 'Segunda-feira', terca: 'Terça-feira', quarta: 'Quarta-feira',
+      quinta: 'Quinta-feira', sexta: 'Sexta-feira', sabado: 'Sábado', domingo: 'Domingo' };
+    try {
+      const schedule = JSON.parse(this.profile().horario) as Record<string, { fechado?: boolean; abertura?: string; fechamento?: string }>;
+      const result = Object.entries(labels).map(([key, label]) => {
+        const day = schedule[key];
+        return day?.fechado ? `${label}: fechado` : day ? `${label}: ${day.abertura} às ${day.fechamento}` : '';
+      }).filter(Boolean).join('\n');
+      return result || this.profile().horario;
+    } catch { return this.profile().horario; }
+  }
 }

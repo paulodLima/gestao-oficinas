@@ -105,7 +105,7 @@ class AdditionalRequestServiceTest {
             "Disco", BigDecimal.ONE, new BigDecimal("100.00"), new BigDecimal("100.00"), null, 0);
         var version = new AdditionalRequest.Version(versionId, 1, versionStatus, "Problema",
             "Justificativa", null, "Mais um dia", null, new BigDecimal("100.00"), photos,
-            List.of(item), null, null, Instant.now(), Instant.now());
+            List.of(item), List.of(), null, null, Instant.now(), Instant.now());
         return new AdditionalRequest(requestId, orderId, status, 2, null, List.of(version),
             Instant.now(), Instant.now());
     }

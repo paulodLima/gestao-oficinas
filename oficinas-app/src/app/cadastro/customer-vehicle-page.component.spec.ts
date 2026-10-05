@@ -56,6 +56,29 @@ describe('Clientes e veículos', () => {
     expect(component.success()).toContain('histórico');
   });
 
+  it('lista os modelos da marca pesquisada e mantém o preenchimento manual para marcas não catalogadas', () => {
+    const component = TestBed.createComponent(CustomerVehiclePageComponent).componentInstance;
+    component.vehicleForm.controls.marca.setValue('volkswagen');
+    component.findModelsForBrand();
+    expect(component.vehicleForm.controls.marca.value).toBe('Volkswagen');
+    expect(component.availableModels()).toContain('T-Cross');
+
+    component.vehicleForm.controls.marca.setValue('Marca artesanal');
+    component.findModelsForBrand();
+    expect(component.availableModels()).toEqual([]);
+    expect(component.brandSearchState()).toBe('not-found');
+    expect(component.manualVehicleBrand()).toBeTrue();
+  });
+
+  it('abre o preenchimento manual ao escolher outro modelo', () => {
+    const component = TestBed.createComponent(CustomerVehiclePageComponent).componentInstance;
+    component.selectVehicleBrand(component.vehicleBrands.find(item => item.name === 'Honda')!);
+    component.chooseOtherModel();
+    component.customVehicleModel.setValue('ZR-V Touring'); component.syncCustomModel();
+    expect(component.manualVehicleModel()).toBeTrue();
+    expect(component.vehicleForm.controls.modelo.value).toBe('ZR-V Touring');
+  });
+
   it('preserva formulário e remove sucesso quando a rede falha', async () => {
     const component = TestBed.createComponent(CustomerVehiclePageComponent).componentInstance;
     await component.load(); component.editCustomer(customer);

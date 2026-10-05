@@ -1,0 +1,69 @@
+/* Shared visual language for the office workspace and customer pages. */
+body .office-content > :not(router-outlet) > main {
+  max-width: 1680px; padding: 24px clamp(16px, 2vw, 32px) 64px;
+}
+body .office-content h1 { font-size: clamp(26px, 2.5vw, 34px); font-weight: 700; letter-spacing: -.035em; line-height: 1.2; }
+body .office-content .hero { align-items: center; margin-bottom: 30px; }
+body .office-content .intro { font-size: 14px; max-width: 72ch; }
+body .office-content .step { display: none; }
+body .office-content :is(.directory, .editor, .filters, .feed article, .layout > section, .layout > aside) {
+  border-color: var(--line); border-radius: 16px; box-shadow: 0 3px 16px #182c2410;
+}
+body .office-content :is(input:not([type=checkbox]):not([type=file]), select, textarea) {
+  border-radius: 9px; min-height: 44px; font-size: 14px; border-color: #d5ded9;
+}
+body .office-content :is(input, select, textarea):focus { border-color: var(--brand); }
+body .office-content .primary { background: var(--brand); border-color: var(--brand); color: white; }
+body .office-content button { transition: background .15s ease, border-color .15s ease; }
+body .office-content button:not(:disabled):hover { border-color: var(--brand); }
+body .office-content .record { padding: 17px; border-radius: 12px; }
+body .office-content .record:hover { background: #f4faf6; }
+body .office-content .summary { border-radius: 12px; }
+body .office-content .badge { letter-spacing: 0; font-weight: 700; }
+body .office-shell app-office-sidebar .sidebar { background: var(--office-sidebar, #52695f); border: 1px solid #ffffff50; padding: 20px 12px 16px; inset: 12px auto 12px 12px; border-radius: 24px; box-shadow: 0 12px 36px #29423712; overflow-y: auto; }
+body .office-shell app-office-sidebar .identity { color: #f5faf7; border-bottom-color: #ffffff18; padding-bottom: 26px; }
+body .office-shell app-office-sidebar .sidebar nav { gap: 7px; padding-top: 28px; }
+body .office-shell app-office-sidebar .sidebar nav a { color: #c4d4cd; font-size: 13px; min-height: 46px; border-radius: 10px; }
+body .office-shell app-office-sidebar .sidebar nav a.active { background: var(--office-sidebar-active, #e3ecd9); color: var(--office-sidebar-active-ink, #304e40); box-shadow: none; }
+body .office-shell app-office-sidebar .sidebar nav a:hover { background: #ffffff0d; color: white; }
+body .office-shell app-office-sidebar .sidebar-footer { border-top-color: #ffffff18; }
+body .office-shell app-office-sidebar .open-order { background: var(--office-sidebar-active, #e3ecd9); color: var(--office-sidebar-active-ink, #304e40); border-radius: 12px; }
+body .office-shell app-office-sidebar .logout { color: #c4d4cd; background: transparent; border-color: #ffffff24; }
+body .auth-layout .story { background: #182b28; }
+body .auth-layout .story h1 { font-family: "Segoe UI", sans-serif; font-weight: 650; font-size: clamp(36px, 4vw, 58px); }
+body .auth-layout .story h1 em { color: #b8edce; font-style: normal; }
+body .auth-layout .story :is(.story-footer, .service-line, .story-copy > p) { color: #d3e1d8; }
+body .auth-layout .eyebrow { display: none; }
+body .auth-layout .form-wrap { max-width: 420px; }
+body .portal-shell { max-width: 1140px; }
+body .portal-shell :is(.access-card, .service-hero, .gallery, .timeline, .additional-card) { border-radius: 18px; box-shadow: 0 4px 22px #183c2910; }
+body .portal-shell .access-card { border-top: 4px solid var(--brand); }
+body .portal-shell .service-title { background: #f3faf5; }
+body .portal-shell .section-title .eyebrow { display: none; }
+body .portal-shell .photo-card { border-radius: 12px; }
+body app-shop-identity article { border-radius: 16px; }
+body app-shop-identity .eyebrow { display: none; }
+body app-shop-identity h2 { font-size: 26px; }
+body .hours-row { grid-template-columns: minmax(105px, 1fr) auto minmax(0, 1fr) minmax(0, 1fr); }
+@media(max-width:1100px) {
+  body .hours-row { grid-template-columns: 1fr 1fr; }
+  body .hours-row .closed-day { grid-column: 1 / -1; }
+  body .hours-title { flex-direction: column; gap: 4px; }
+}
+@media(max-width:900px) {
+  body .office-shell app-office-sidebar .sidebar { padding: 10px; inset: 8px 8px auto; width: calc(100% - 16px); border-radius: 18px; }
+  body .office-shell app-office-sidebar .sidebar nav { padding: 0; gap: 4px; }
+  body .office-shell app-office-sidebar .identity { padding: 0 14px 0 0; }
+}
+@media(min-width:901px) {
+  body .office-shell .office-content { margin-left: calc(var(--sidebar-width) + 24px); }
+}
+@media(max-width:900px) {
+  body .office-shell .office-content { padding-top: 94px; }
+  body .office-shell app-office-sidebar .identity strong { display: none; }
+}
+@media(max-width:620px) {
+  body .office-content > :not(router-outlet) > main { padding: 24px 16px 40px; }
+  body .office-content :is(input:not([type=checkbox]):not([type=file]), select, textarea) { font-size: 16px; }
+  body .office-content .hero { align-items: stretch; }
+}

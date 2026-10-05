@@ -1,22 +1,34 @@
 <main class="auth-layout">
-  <aside class="story" aria-label="Acesso à oficina">
-    <a routerLink="/entrar" class="brand"><span class="brand-mark" aria-hidden="true">OF</span> acesso da oficina</a>
-    <div class="story-copy">
-      <p class="eyebrow">DA ENTRADA À ENTREGA</p>
-      <h1>Organização para<br>quem cuida de cada<br><em>detalhe.</em></h1>
-      <p>Mais clareza para quem deixa o carro.<br>Mais tranquilidade para quem cuida dele.</p>
-      <div class="service-line" aria-hidden="true"><span>01 · Receber</span><i></i><span>02 · Cuidar</span><i></i><span>03 · Entregar</span></div>
+  <aside class="login-visual" [class.has-photo]="branding()?.temCapa && !imageFailed()" aria-label="Identidade da oficina">
+    @if (branding()?.temCapa && !imageFailed()) {
+      <img class="cover-image" [src]="imageBase + '/capa'" alt="Imagem da oficina" (error)="imageFailed.set(true)">
+    } @else {
+      <svg class="workshop-art" viewBox="0 0 500 360" fill="none" aria-hidden="true">
+        <path d="M60 280h380M95 275V92h310v183M110 130h280M110 160h280M110 190h280" stroke="currentColor" stroke-width="2"/>
+        <path d="m147 247 19-47h156l24 47v35H147v-35Z" fill="currentColor" fill-opacity=".12" stroke="currentColor" stroke-width="3"/>
+        <path d="m181 214-9 24h147l-12-24M147 253h199" stroke="currentColor" stroke-width="2"/>
+        <circle cx="178" cy="261" r="8" fill="currentColor"/><circle cx="313" cy="261" r="8" fill="currentColor"/>
+        <path d="M165 283v15h30v-15m105 0v15h30v-15M223 112h55" stroke="currentColor" stroke-width="5"/>
+      </svg>
+    }
+    <div class="visual-copy"><span>DA ENTRADA À ENTREGA</span>
+      <h1>Cuidado em cada detalhe.</h1>
+      <p>Uma rotina mais organizada.<br>Um cliente mais tranquilo.</p>
     </div>
-    <p class="story-footer">FEITO PARA O RITMO DA SUA OFICINA.</p>
   </aside>
   <section class="form-side">
     <div class="form-wrap">
-      <p class="eyebrow">ÁREA DO PROPRIETÁRIO</p>
+      <a class="login-brand" routerLink="/entrar" [queryParams]="slug ? { oficina: slug } : {}">
+        @if (branding()?.temLogo && !logoFailed()) {
+          <img [src]="imageBase + '/logo'" [alt]="branding()!.nome" (error)="logoFailed.set(true)">
+        } @else { <span class="login-monogram" aria-hidden="true">{{ branding()?.nome?.charAt(0) || 'OF' }}</span> }
+        <strong>{{ branding()?.nome || 'Sua oficina' }}</strong>
+      </a>
       <h2>{{ title }}</h2>
       <p class="subtitle">{{ subtitle }}</p>
       @if (success()) {
         <div class="notice success" role="status">{{ success() }}</div>
-        <a class="primary button-link" routerLink="/entrar">Ir para o login <span aria-hidden="true">↗</span></a>
+        <a class="primary button-link" routerLink="/entrar" queryParamsHandling="preserve">Ir para o login <span aria-hidden="true">↗</span></a>
       } @else {
         <form [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="busy()">
           @if (mode === 'register') {
@@ -42,7 +54,7 @@
             <label for="confirmacao">Confirmar senha</label>
             <input id="confirmacao" type="password" formControlName="confirmacao" autocomplete="new-password">
           }
-          @if (mode === 'login') { <a class="forgot" routerLink="/recuperar-senha">Esqueci minha senha</a> }
+          @if (mode === 'login') { <a class="forgot" routerLink="/recuperar-senha" queryParamsHandling="preserve">Esqueci minha senha</a> }
           @if (error()) { <div class="notice error" role="alert">{{ error() }}</div> }
           <button class="primary" type="submit" [disabled]="busy()">
             {{ busy() ? 'Aguarde…' : mode === 'login' ? 'Entrar na oficina' : mode === 'register' ? 'Criar minha conta' : mode === 'recover' ? 'Enviar link de recuperação' : 'Salvar nova senha' }}
@@ -50,7 +62,7 @@
           </button>
         </form>
         @if (mode === 'login') { <p class="switch">Primeira vez aqui? <a routerLink="/cadastro">Criar uma conta</a></p> }
-        @else { <p class="switch"><a routerLink="/entrar">← Voltar para o login</a></p> }
+        @else { <p class="switch"><a routerLink="/entrar" queryParamsHandling="preserve">← Voltar para o login</a></p> }
         @if (mode === 'reset') { <p class="switch"><a routerLink="/recuperar-senha">Solicitar outro link</a></p> }
       }
       <footer class="privacy">Seu trabalho em boas mãos. Seu acesso também.</footer>

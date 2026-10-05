@@ -30,6 +30,7 @@ async function mockOffice(page: Page) {
     return route.fulfill({ status: 404 });
   });
   await page.goto('/abrir-ordem');
+  await page.getByRole('button', { name: /OS-000016/ }).click();
   await expect(page.getByRole('heading', { name: 'Compartilhar acompanhamento' })).toBeVisible();
   return mutations;
 }
@@ -44,7 +45,7 @@ test('prepara, copia, abre WhatsApp manualmente e revoga sem registrar entrega',
   await expect(linkField).toHaveValue(`${new URL(page.url()).origin}/acompanhar#token=${token}`);
   await expect(page.locator('app-order-share')).not.toContainText(/Ana Souza|BRA1E23|52998224725/);
   await page.getByRole('button', { name: 'Copiar link', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Link copiado');
+  await expect(page.locator('app-order-share').getByRole('status')).toContainText('Link copiado');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await linkField.inputValue());
   const opened = context.waitForEvent('page');
   await page.getByRole('link', { name: 'Abrir WhatsApp' }).click();
@@ -55,13 +56,13 @@ test('prepara, copia, abre WhatsApp manualmente e revoga sem registrar entrega',
   expect(destination.searchParams.get('text')).toContain('Olá!');
   expect(destination.searchParams.has('phone')).toBeFalsy();
   await whatsapp.close();
-  await expect(page.getByRole('status')).toContainText('não confirma envio nem entrega');
+  await expect(page.locator('app-order-share').getByRole('status')).toContainText('não confirma envio nem entrega');
   if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 320, height: 740 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await page.locator('app-order-share').screenshot({ path: `test-results/compartilhamento-${testInfo.project.name}.png` });
   await page.getByRole('button', { name: 'Revogar links desta OS' }).click();
   await expect(page.getByRole('link', { name: 'Abrir WhatsApp' })).toHaveCount(0);
-  await expect(page.getByRole('status')).toContainText('Links desta OS revogados');
+  await expect(page.locator('app-order-share').getByRole('status')).toContainText('Links desta OS revogados');
   expect(mutations).toEqual(['POST /api/ordens-servico/os-16/acesso', 'DELETE /api/ordens-servico/os-16/acesso']);
 });
 
@@ -77,8 +78,9 @@ test('oferece seleção manual quando a cópia é negada e permite revogar após
   await field.focus();
   expect(await field.evaluate((input: HTMLInputElement) => input.selectionEnd! - input.selectionStart!)).toBe((await field.inputValue()).length);
   await page.reload();
+  await page.getByRole('button', { name: /OS-000016/ }).click();
   await page.getByRole('button', { name: 'Revogar links desta OS' }).click();
-  await expect(page.getByRole('status')).toContainText('revogados');
+  await expect(page.locator('app-order-share').getByRole('status')).toContainText('revogados');
   expect(mutations).toHaveLength(2);
 });
 

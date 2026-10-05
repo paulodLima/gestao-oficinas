@@ -1,8 +1,7 @@
 <main>
   <div class="hero">
     <div>
-      <p class="eyebrow">CADASTROS / RELACIONAMENTO</p>
-      <h1>Clientes em ordem.<br>Veículos no lugar certo.</h1>
+      <h1>{{ pane() === 'clientes' ? 'Clientes' : 'Veículos' }}</h1>
       <p class="intro">Mantenha responsáveis, contatos e placas prontos para abrir o próximo atendimento.</p>
     </div>
     <div class="summary" aria-label="Resumo dos cadastros">
@@ -17,7 +16,8 @@
 
   @if (!loading()) {
     @if (pane() === 'clientes') {
-      <section class="workspace" aria-label="Cadastro de clientes">
+      <section class="workspace" [class.focused]="workspaceMode() === 'form'" [class.searching]="workspaceMode() === 'search'" aria-label="Cadastro de clientes">
+        @if (workspaceMode() === 'search') {
         <div class="directory">
           <div class="section-heading">
             <div><p class="step">01</p><h2>Clientes</h2></div>
@@ -28,10 +28,10 @@
             <div><input id="customer-search" [formControl]="customerSearch" maxlength="100" autocomplete="off">
               <button type="submit" [disabled]="busy()">Buscar</button></div>
           </form>
-          @if (!customers().length) {
+          @if (hasSearched() && !customers().length) {
             <div class="empty"><h3>Nenhum cliente encontrado.</h3><p>Cadastre o primeiro cliente ou ajuste a busca.</p></div>
           }
-          <div class="cards">
+          @if (hasSearched()) { <div class="cards">
             @for (customer of customers(); track customer.id) {
               <button type="button" class="record" [class.selected]="editingCustomer()?.id === customer.id" (click)="editCustomer(customer)">
                 <span class="avatar" aria-hidden="true">{{ customer.nome.charAt(0).toUpperCase() }}</span>
@@ -39,11 +39,14 @@
                   <small>{{ customer.email || customer.telefone || 'Sem contato cadastrado' }}</small></span>
                 <span class="badge" [class.verified]="customer.emailVerificadoEm">{{ customer.emailVerificadoEm ? 'Verificado' : 'Pendente' }}</span>
               </button>
-            }
-          </div>
+          }
+          </div> }
         </div>
+        }
 
+        @if (workspaceMode() === 'form') {
         <aside class="editor">
+          <div class="focus-nav"><button type="button" class="back-button" (click)="backToSearch()">← Buscar clientes</button><button type="button" class="secondary" (click)="newCustomer()">Novo cliente</button></div>
           <p class="step">02</p><h2>{{ editingCustomer() ? 'Editar cliente' : 'Novo cliente' }}</h2>
           <form [formGroup]="customerForm" (ngSubmit)="saveCustomer()">
             <fieldset [disabled]="busy()">
@@ -52,13 +55,17 @@
               @if (customerForm.controls.nome.touched && customerForm.controls.nome.invalid) { <small class="field-error">Informe o nome do cliente.</small> }
 
               <label for="customer-cpf">CPF *</label>
-              <input id="customer-cpf" formControlName="cpf" maxlength="14" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">
+              <input id="customer-cpf" formControlName="cpf" maxlength="14" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" (input)="formatCpfInput()">
               @if (customerForm.controls.cpf.touched && customerForm.controls.cpf.invalid) { <small class="field-error">Informe os 11 dígitos do CPF.</small> }
 
-              <div class="pair"><div><label for="customer-phone">Telefone</label><input id="customer-phone" formControlName="telefone" maxlength="30" type="tel" autocomplete="tel"></div>
+              <div class="pair"><div><label for="customer-phone">Telefone</label><input id="customer-phone" formControlName="telefone" maxlength="15" type="tel" autocomplete="tel" placeholder="(00) 00000-0000" (input)="formatCustomerPhone()"></div>
                 <div><label for="customer-email">E-mail</label><input id="customer-email" formControlName="email" maxlength="254" type="email" autocomplete="email"></div></div>
               <p class="hint">O e-mail precisa ser verificado antes de receber códigos de acesso. CPF nunca é usado como senha.</p>
-              <button type="submit" class="primary">{{ busy() ? 'Salvando…' : editingCustomer() ? 'Salvar cliente' : 'Cadastrar cliente' }}</button>
+              <div class="next-actions">
+                <button type="submit" class="primary">{{ busy() ? 'Salvando…' : editingCustomer() ? 'Salvar cliente' : 'Cadastrar cliente' }}</button>
+                <button type="button" class="secondary" (click)="saveCustomer(true)">Cadastrar veículo →</button>
+              </div>
+              <p class="hint">Ao continuar, salvamos o cliente e já o selecionamos como responsável pelo veículo.</p>
             </fieldset>
           </form>
 
@@ -79,9 +86,11 @@
             </section>
           }
         </aside>
+        }
       </section>
     } @else {
-      <section class="workspace" aria-label="Cadastro de veículos">
+      <section class="workspace" [class.focused]="workspaceMode() === 'form'" [class.searching]="workspaceMode() === 'search'" aria-label="Cadastro de veículos">
+        @if (workspaceMode() === 'search') {
         <div class="directory">
           <div class="section-heading">
             <div><p class="step">01</p><h2>Veículos</h2></div>
@@ -92,20 +101,23 @@
             <div><input id="vehicle-search" [formControl]="vehicleSearch" maxlength="100" autocomplete="off">
               <button type="submit" [disabled]="busy()">Buscar</button></div>
           </form>
-          @if (!vehicles().length) {
+          @if (hasSearched() && !vehicles().length) {
             <div class="empty"><h3>Nenhum veículo encontrado.</h3><p>Cadastre um cliente antes de vincular o primeiro veículo.</p></div>
           }
-          <div class="cards">
+          @if (hasSearched()) { <div class="cards">
             @for (vehicle of vehicles(); track vehicle.id) {
               <button type="button" class="record vehicle-record" [class.selected]="editingVehicle()?.id === vehicle.id" (click)="editVehicle(vehicle)">
                 <span class="plate">{{ formatPlate(vehicle.placa) }}</span>
                 <span><strong>{{ vehicle.marca }} {{ vehicle.modelo }}</strong><small>{{ vehicle.ano || 'Ano não informado' }} · {{ vehicle.cor || 'Cor não informada' }}</small><small>Responsável: {{ vehicle.clienteNome }}</small></span>
               </button>
-            }
-          </div>
+          }
+          </div> }
         </div>
+        }
 
+        @if (workspaceMode() === 'form') {
         <aside class="editor">
+          <div class="focus-nav"><button type="button" class="back-button" (click)="backToSearch()">← Buscar veículos</button><button type="button" class="secondary" (click)="newVehicle()">Novo veículo</button></div>
           <p class="step">02</p><h2>{{ editingVehicle() ? 'Editar veículo' : 'Novo veículo' }}</h2>
           @if (!customers().length) { <p class="notice warning">Cadastre ao menos um cliente antes de incluir um veículo.</p> }
           <form [formGroup]="vehicleForm" (ngSubmit)="saveVehicle()">
@@ -113,17 +125,55 @@
               <label for="vehicle-plate">Placa antiga ou Mercosul *</label>
               <input id="vehicle-plate" formControlName="placa" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="ABC-1D23">
               @if (vehicleForm.controls.placa.touched && vehicleForm.controls.placa.invalid) { <small class="field-error">Use o formato ABC-1234 ou ABC-1D23.</small> }
-              <div class="pair"><div><label for="vehicle-brand">Marca *</label><input id="vehicle-brand" formControlName="marca" maxlength="80"></div>
-                <div><label for="vehicle-model">Modelo *</label><input id="vehicle-model" formControlName="modelo" maxlength="120"></div></div>
+              <div class="pair catalog-pair"><div><label for="vehicle-brand">Marca *</label>
+                  @if (manualVehicleBrand()) {
+                    <div class="field-action"><input id="vehicle-brand" formControlName="marca" maxlength="80" autocomplete="off" (input)="onBrandInput()" placeholder="Digite a marca">
+                      <button type="button" (click)="returnToBrandCatalog()">Ver catálogo</button></div>
+                  } @else {
+                    <div class="brand-picker"><button id="vehicle-brand" type="button" class="brand-trigger" [attr.aria-expanded]="brandMenuOpen()" aria-haspopup="listbox" (click)="toggleBrandMenu()">
+                        <span [class.placeholder]="!selectedVehicleBrand()">{{ selectedVehicleBrand()?.name || 'Selecione uma marca' }}</span><span class="chevron" aria-hidden="true">⌄</span></button>
+                      @if (brandMenuOpen()) {
+                        <div class="brand-menu" role="listbox" aria-label="Marcas de veículos">
+                          <div class="brand-filter"><input #brandFilterInput type="search" [value]="brandFilter()" (input)="brandFilter.set(brandFilterInput.value)" placeholder="Filtrar marca" autocomplete="off"><span aria-hidden="true">⌕</span></div>
+                          <div class="brand-options">
+                            @for (brand of filteredVehicleBrands(); track brand.name) { <button type="button" role="option" [attr.aria-selected]="selectedVehicleBrand()?.name === brand.name" (click)="selectVehicleBrand(brand)">{{ brand.name }}</button> }
+                            @if (!filteredVehicleBrands().length) { <p>Nenhuma marca encontrada.</p> }
+                          </div>
+                          <button type="button" class="manual-brand" (click)="startManualBrand()">Não encontrou a marca? Informar manualmente</button>
+                        </div>
+                      }
+                    </div>
+                  }
+                  @if (brandSearchState() === 'found') { <small class="catalog-feedback success-feedback">{{ availableModels().length }} modelos disponíveis.</small> }
+                </div>
+                <div><label for="vehicle-model">Modelo *</label>
+                  @if (selectedVehicleBrand()) {
+                    @if (manualVehicleModel()) {
+                      <input id="vehicle-model" [formControl]="customVehicleModel" maxlength="120" autocomplete="off" placeholder="Digite o modelo" (input)="syncCustomModel()">
+                    } @else {
+                      <select id="vehicle-model" formControlName="modelo" (change)="onVehicleModelSelection()"><option value="">Selecione o modelo</option>
+                        @for (model of availableModels(); track model) { <option [value]="model">{{ model }}</option> }
+                        <option value="__outro__">Outro modelo</option>
+                      </select>
+                    }
+                  } @else { <input id="vehicle-model" formControlName="modelo" maxlength="120" autocomplete="off" placeholder="Selecione ou informe a marca primeiro"> }
+                </div></div>
               <div class="pair"><div><label for="vehicle-year">Ano</label><input id="vehicle-year" formControlName="ano" maxlength="4" inputmode="numeric"></div>
-                <div><label for="vehicle-color">Cor</label><input id="vehicle-color" formControlName="cor" maxlength="50"></div></div>
+                <div><label for="vehicle-color">Cor</label><select id="vehicle-color" formControlName="cor"><option value="">Selecione a cor</option>
+                    @for (color of standardVehicleColors; track color) { <option [value]="color">{{ color }}</option> }
+                    @if (editingVehicle()?.cor && !isStandardVehicleColor(editingVehicle()!.cor)) { <option [value]="editingVehicle()!.cor">{{ editingVehicle()!.cor }}</option> }
+                  </select></div></div>
               <label for="vehicle-customer">Responsável *</label>
               <select id="vehicle-customer" formControlName="clienteId" [attr.disabled]="editingVehicle() ? '' : null">
                 <option value="">Selecione o cliente</option>
                 @for (customer of activeCustomers(); track customer.id) { <option [value]="customer.id">{{ customer.nome }}</option> }
               </select>
               @if (editingVehicle()) { <p class="hint">A troca de responsável é registrada separadamente para preservar o histórico.</p> }
-              <button type="submit" class="primary">{{ busy() ? 'Salvando…' : editingVehicle() ? 'Salvar veículo' : 'Cadastrar veículo' }}</button>
+              <div class="next-actions">
+                <button type="submit" class="primary">{{ busy() ? 'Salvando…' : editingVehicle() ? 'Salvar veículo' : 'Cadastrar veículo' }}</button>
+                <button type="button" class="secondary" (click)="saveVehicle(true)">Abrir ordem de serviço →</button>
+              </div>
+              <p class="hint">Ao continuar, salvamos o veículo e preenchemos cliente e veículo na nova ordem.</p>
             </fieldset>
           </form>
 
@@ -138,6 +188,7 @@
             </section>
           }
         </aside>
+        }
       </section>
     }
   }

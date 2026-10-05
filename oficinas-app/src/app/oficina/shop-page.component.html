@@ -1,5 +1,4 @@
 <main>
-  <p class="eyebrow">PERFIL DA OFICINA</p>
   <h1>Dados da sua oficina</h1>
   <p class="intro">Atualize a identidade e os dados que aparecem para seus clientes.</p>
   @if (error()) { <p role="alert" class="notice error">{{ error() }}</p> }
@@ -11,15 +10,38 @@
       <form [formGroup]="form" (ngSubmit)="save()">
         <fieldset [disabled]="busy()"><legend>Informações da oficina</legend>
           <label for="shop-name">Nome da oficina *</label><input id="shop-name" formControlName="nome" maxlength="120" autocomplete="organization">
-          <div class="pair"><div><label for="shop-phone">Telefone de contato</label><input id="shop-phone" type="tel" formControlName="telefone" maxlength="30" autocomplete="tel"></div>
+          <div class="pair"><div><label for="shop-phone">Telefone de contato</label><input id="shop-phone" type="tel" formControlName="telefone" maxlength="15" autocomplete="tel" placeholder="(00) 00000-0000" (input)="formatPhone()"></div>
           <div><label for="shop-email">E-mail de contato</label><input id="shop-email" type="email" formControlName="emailContato" maxlength="254" autocomplete="email"></div></div>
           <p class="hint">Use os contatos comerciais. O e-mail de acesso à conta permanece o mesmo.</p>
-          <label for="shop-address">Endereço</label><textarea id="shop-address" formControlName="endereco" maxlength="500" rows="3" autocomplete="street-address"></textarea>
-          <label for="shop-hours">Horário de atendimento</label><textarea id="shop-hours" formControlName="horario" maxlength="1000" rows="3" placeholder="Segunda a sexta: 8h às 18h. Sábado: 8h às 12h."></textarea>
-          <label for="shop-timezone">Fuso horário *</label><input id="shop-timezone" formControlName="fuso" maxlength="80" list="timezones">
-          <datalist id="timezones"><option value="America/Sao_Paulo"></option><option value="America/Manaus"></option><option value="America/Rio_Branco"></option><option value="America/Noronha"></option></datalist>
-          <label class="toggle"><input type="checkbox" formControlName="perfilPublico"> Publicar perfil da oficina</label>
-          <p class="hint">Ao ativar e salvar, nome, logo, contatos, endereço, horário e fuso ficam disponíveis a quem abrir o link público.</p>
+          <label for="shop-address">Endereço</label>
+          <div class="address-search">
+            <textarea id="shop-address" formControlName="endereco" maxlength="500" rows="3" autocomplete="street-address" placeholder="Comece pelo nome do estabelecimento ou endereço" (input)="searchAddress()"></textarea>
+            @if (addressSearching()) { <span class="address-status">Buscando endereços…</span> }
+            @if (addressLookupError()) { <span class="address-error" role="status">{{ addressLookupError() }}</span> }
+            @if (addressSearched() && !addressSuggestions().length && !addressLookupError()) { <span class="address-status">Nenhum endereço encontrado. Tente incluir cidade ou UF.</span> }
+            @if (addressSuggestions().length) {
+              <div class="address-options" role="listbox" aria-label="Sugestões de endereço">
+                @for (suggestion of addressSuggestions(); track suggestion.endereco) {
+                  <button type="button" role="option" (mousedown)="$event.preventDefault()" (click)="chooseAddress(suggestion)">{{ suggestion.endereco }}</button>
+                }
+              </div>
+            }
+          </div>
+          <p class="hint">Selecione uma sugestão para preencher o endereço completo ou ajuste o texto manualmente.</p>
+          <section class="hours" [formGroup]="schedule" aria-labelledby="shop-hours">
+            <div class="hours-title"><h2 id="shop-hours">Horário de atendimento</h2><span>Defina os dias em que a oficina atende.</span></div>
+            @for (day of days; track day.key) {
+              <div class="hours-row" [formGroupName]="day.key">
+                <strong>{{ day.label }}</strong>
+                <label class="closed"><input type="checkbox" formControlName="fechado"> Fechado</label>
+                @if (!dayControl(day.key).controls.fechado.value) {
+                  <label>Abertura <input type="time" formControlName="abertura"></label>
+                  <label>Fechamento <input type="time" formControlName="fechamento"></label>
+                } @else { <span class="closed-day">Não atende neste dia</span> }
+              </div>
+            }
+          </section>
+          <p class="hint">Ao salvar, nome, logo, contatos, endereço e horário ficam disponíveis no perfil público da oficina.</p>
           <button type="submit" class="primary">{{ busy() ? 'Salvando…' : 'Salvar informações' }}</button>
         </fieldset>
       </form>
@@ -27,6 +49,23 @@
         <label for="shop-logo">Selecionar logo</label><input id="shop-logo" type="file" accept="image/png,image/jpeg" (change)="upload($event)" [disabled]="busy()">
         <p class="hint">A logo é salva ao selecionar o arquivo.</p>
         @if (current.temLogo) { <button type="button" (click)="removeLogo()" [disabled]="busy()">Remover logo</button> }
+      </section>
+      <section class="logo"><h2>Aparência do login</h2>
+        <p>A logo e o nome acima identificam sua oficina. Escolha uma imagem para aparecer ao lado do formulário no computador.</p>
+        <label for="shop-cover">Imagem de capa</label>
+        <input id="shop-cover" type="file" accept="image/png,image/jpeg" (change)="uploadCover($event)" [disabled]="busy()">
+        <p class="hint">Imagem pública. PNG ou JPEG, até 2 MiB e 4 megapixels. Salva ao selecionar.</p>
+        <button type="button" (click)="removeCover()" [disabled]="busy()">Remover capa</button>
+        <a class="public-link" routerLink="/entrar" [queryParams]="{ oficina: current.slug }" target="_blank" rel="noopener">Visualizar login da oficina ↗</a>
+      </section>
+      <section class="logo theme-colors" [formGroup]="colors">
+        <div class="section-heading"><div><h2>Cores da marca</h2><p>Escolha uma paleta pronta para combinar menu, item selecionado e botões.</p></div><span class="theme-preview" [style.background]="selectedTheme().corDestaque" aria-hidden="true"></span></div>
+        <label class="theme-picker" for="shop-theme">Paleta da oficina
+          <select id="shop-theme" formControlName="tema" (change)="previewTheme()" [style.border-left-color]="selectedTheme().corMenu">
+            @for (theme of themes; track theme.id) { <option [value]="theme.id">{{ theme.label }}</option> }
+          </select>
+        </label>
+        <div class="color-actions"><button type="button" class="primary" (click)="saveColors()" [disabled]="busy()">{{ busy() ? 'Salvando…' : 'Salvar cores' }}</button><button type="button" class="restore-colors" (click)="restoreColors()" [disabled]="busy()">Restaurar padrão</button></div>
       </section>
     </section><aside><p class="eyebrow">PRÉVIA PARA O CLIENTE</p>
       @for (version of [current.versao]; track version) { <app-shop-identity [profile]="preview()" /> }

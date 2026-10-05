@@ -1,6 +1,8 @@
 package br.com.gestao.oficinas_api.notificacoes;
 
 import br.com.gestao.oficinas_api.identidade.AuthProperties;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -56,9 +58,9 @@ public class NotificationWorker {
                     + "\nO acesso expira sete dias após a entrega e não reabre a OS. Sua avaliação é privada por padrão.");
             } else {
             email.send(item.recipient(), item.title() + " · Gestão Oficinas", item.message()
-                + "\n\nOficina: " + item.shopName() + "\nIdentificador da oficina: " + item.shopSlug()
-                + "\n\nConsulte os detalhes no portal da oficina: " + auth.publicUrl() + "/acompanhar"
-                + "\nInforme o identificador acima e a placa do veículo para receber seu código de acesso."
+                + "\n\nOficina: " + item.shopName()
+                + "\n\nConsulte os detalhes no portal da oficina: " + trackingUrl(item.shopName())
+                + "\nInforme a placa do veículo para receber seu código de acesso."
                 + "\nO acesso continua exigindo sua identificação. Este e-mail não autoriza serviços.");
             }
         } catch (RuntimeException failure) {
@@ -87,6 +89,9 @@ public class NotificationWorker {
     static Duration retryDelay(int failedAttempts) {
         return Duration.ofMinutes(switch (failedAttempts) { case 1 -> 1; case 2 -> 5; case 3 -> 15; case 4 -> 60;
             default -> throw new IllegalArgumentException("Limite de tentativas atingido"); });
+    }
+    private String trackingUrl(String officeName) {
+        return auth.publicUrl() + "/acompanhar#oficina=" + URLEncoder.encode(officeName, StandardCharsets.UTF_8);
     }
     private record Pending(UUID id, UUID shop, UUID customer, String recipient, Timestamp verified,
                            int attempts, int cycle, String title, String message, String shopName, String shopSlug, String event, String reference) {}

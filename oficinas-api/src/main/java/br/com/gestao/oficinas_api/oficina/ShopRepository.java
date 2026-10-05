@@ -13,19 +13,21 @@ public class ShopRepository {
     public ShopProfile findPublic(String slug) { return query("slug=? AND perfil_publico=true", slug); }
     private ShopProfile query(String condition, Object value) {
         return jdbc.query("SELECT id,slug,nome,telefone,email_contato,endereco,horario,fuso,perfil_publico,"
-                + "logo IS NOT NULL AS tem_logo,versao FROM oficina WHERE " + condition,
+                + "logo IS NOT NULL AS tem_logo,cor_menu,cor_menu_ativo,cor_destaque,versao FROM oficina WHERE " + condition,
             (row, index) -> new ShopProfile(row.getObject("id", UUID.class), row.getString("slug"),
                 row.getString("nome"), row.getString("telefone"), row.getString("email_contato"),
                 row.getString("endereco"), row.getString("horario"), row.getString("fuso"),
-                row.getBoolean("perfil_publico"), row.getBoolean("tem_logo"), row.getLong("versao")), value)
+                row.getBoolean("perfil_publico"), row.getBoolean("tem_logo"), row.getString("cor_menu"),
+                row.getString("cor_menu_ativo"), row.getString("cor_destaque"), row.getLong("versao")), value)
             .stream().findFirst().orElseThrow(ShopRepository::notFound);
     }
     public void save(ShopProfile profile) {
         checkUpdated(jdbc.update("""
             UPDATE oficina SET nome=?,telefone=?,email_contato=?,endereco=?,horario=?,fuso=?,
-            perfil_publico=?,versao=versao+1,updated_at=now() WHERE id=? AND versao=?
+            perfil_publico=?,cor_menu=?,cor_menu_ativo=?,cor_destaque=?,versao=versao+1,updated_at=now() WHERE id=? AND versao=?
             """, profile.nome(), profile.telefone(), profile.emailContato(), profile.endereco(),
-            profile.horario(), profile.fuso(), profile.perfilPublico(), profile.id(), profile.versao()));
+            profile.horario(), profile.fuso(), profile.perfilPublico(), profile.corMenu(), profile.corMenuAtivo(),
+            profile.corDestaque(), profile.id(), profile.versao()));
     }
     public void saveLogo(UUID id, long version, byte[] image) {
         checkUpdated(jdbc.update("UPDATE oficina SET logo=?,versao=versao+1,updated_at=now() WHERE id=? AND versao=?",
@@ -35,6 +37,17 @@ public class ShopRepository {
         byte[] image = jdbc.queryForObject("SELECT logo FROM oficina WHERE id=?", byte[].class, id);
         if (image == null) throw notFound();
         return image;
+    }
+    public void saveCover(UUID id, long version, byte[] image) {
+        checkUpdated(jdbc.update("UPDATE oficina SET capa_login=?,versao=versao+1,updated_at=now() WHERE id=? AND versao=?",
+            image, id, version));
+    }
+    public boolean hasPublicCover(String slug) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT capa_login IS NOT NULL FROM oficina WHERE slug=? AND perfil_publico=true", Boolean.class, slug));
+    }
+    public byte[] findPublicCover(String slug) {
+        return jdbc.query("SELECT capa_login FROM oficina WHERE slug=? AND perfil_publico=true AND capa_login IS NOT NULL",
+            (row, index) -> row.getBytes("capa_login"), slug).stream().findFirst().orElseThrow(ShopRepository::notFound);
     }
     public byte[] findPublicLogo(String slug) {
         return jdbc.query("SELECT logo FROM oficina WHERE slug=? AND perfil_publico=true AND logo IS NOT NULL",

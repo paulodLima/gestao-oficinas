@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ServiceOrderService {
     private static final Instant MINIMUM_ENTRY = Instant.parse("2000-01-01T00:00:00Z");
+    private static final Duration MAXIMUM_SCHEDULE_AHEAD = Duration.ofDays(30);
     private final ServiceOrderRepository repository;
     private final Clock clock;
     private final NotificationService notifications;
@@ -60,8 +61,8 @@ public class ServiceOrderService {
             throw invalid("O relato inicial deve ter entre 10 e 2000 caracteres.");
         }
         if (input.entradaEm() == null || input.entradaEm().isBefore(MINIMUM_ENTRY)
-            || input.entradaEm().isAfter(clock.instant().plus(Duration.ofMinutes(5)))) {
-            throw invalid("Informe uma data de entrada válida.");
+            || input.entradaEm().isAfter(clock.instant().plus(MAXIMUM_SCHEDULE_AHEAD))) {
+            throw invalid("Informe uma data de entrada válida, com no máximo 30 dias de antecedência.");
         }
         if (input.kmEntrada() == null || input.kmEntrada() < 0 || input.kmEntrada() > 9_999_999) {
             throw invalid("Informe uma quilometragem entre 0 e 9.999.999 km.");

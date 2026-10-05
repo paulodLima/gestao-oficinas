@@ -47,7 +47,7 @@ public class PortalChallengeIssuer {
               JOIN vinculo_cliente_veiculo l ON l.oficina_id=v.oficina_id
                 AND l.veiculo_id=v.id AND l.fim_em IS NULL
               JOIN cliente c ON c.oficina_id=l.oficina_id AND c.id=l.cliente_id
-             WHERE o.slug=? AND v.placa=? AND c.email_verificado_em IS NOT NULL AND c.ativo=true
+             WHERE lower(o.slug)=lower(?) AND v.placa=? AND c.email_verificado_em IS NOT NULL AND c.ativo=true
              FOR UPDATE OF c
             """, (row, number) -> new Target(row.getObject(1, UUID.class), row.getObject(2, UUID.class),
                 row.getString(3), row.getLong(4)), body.oficinaSlug(), plate);

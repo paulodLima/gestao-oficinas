@@ -23,7 +23,7 @@ test('cadastro, login, recuperação SMTP, troca de senha e logout', async ({ pa
   await page.getByRole('button', { name: 'Entrar na oficina' }).click();
   await expect(page).toHaveURL(/\/painel$/);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'O ritmo da oficina.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel da oficina' })).toBeVisible();
   const cookies = await page.context().cookies();
   expect(cookies.find(c => c.name === 'OFICINAS_SESSION')).toMatchObject({ httpOnly: true, sameSite: 'Lax' });
   const recovery = await page.context().newPage();

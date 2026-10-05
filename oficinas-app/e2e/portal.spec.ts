@@ -46,7 +46,7 @@ test('portal mantém fotos antigas após mudança de status e permite filtrar e 
 
   status = 'EM_MANUTENCAO';
   await page.reload();
-  await expect(page.getByText('Em manutenção')).toBeVisible();
+  await expect(page.locator('.status')).toHaveText('Em manutenção');
   await expect(page.getByText('Chegada do veículo', { exact: false })).toBeVisible();
   await expect(page.getByText('Inspeção do motor', { exact: false })).toBeVisible();
   if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 320, height: 740 });

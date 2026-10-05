@@ -15,6 +15,7 @@ describe('Solicitações de serviços adicionais', () => {
       justificativa: 'Substituição necessária', previsaoProposta: null, impactoPrazo: 'Mais um dia',
       motivoSubstituicao: null, total: 100, fotoIds: [], enviadaEm: null, substituidaEm: null,
       createdAt: order.createdAt, updatedAt: order.updatedAt,
+      blocos: [],
       itens: [{ id: 'i1', tipo: 'PECA', descricao: 'Disco', quantidade: 1,
         valorUnitario: 100, total: 100, grupoDependencia: null, ordem: 1 }] }] };
   let service: jasmine.SpyObj<AdditionalRequestService>;

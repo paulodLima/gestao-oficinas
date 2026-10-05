@@ -8,7 +8,7 @@ test('painel filtra, alterna lista/quadro e abre a OS correta no celular e deskt
     relatoInicial: 'Revisar sistema de freios.', entradaEm: new Date().toISOString(), kmEntrada: 30000, previsaoEm: null });
   await post(page.request, `/api/ordens-servico/${second.id}/status`, { status: 'AGUARDANDO_PECAS', expectedVersion: 0 });
   await page.goto('/painel?view=lista');
-  await expect(page.getByRole('heading', { name: 'O ritmo da oficina.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Painel da oficina' })).toBeVisible();
   await expect(page.locator('app-dashboard-card')).toHaveCount(2);
   await expect(page.getByRole('button', { name: '1 Atrasadas', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '1 Atrasadas', exact: true }).click();

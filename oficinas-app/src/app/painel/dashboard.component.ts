@@ -4,10 +4,11 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DashboardCardComponent } from './dashboard-card.component';
+import { NotificationBellComponent } from '../notificacoes/notification-bell.component';
 import { DashboardFilters, DashboardService, DashboardSnapshot, groupCards, Situation, STAGES } from './dashboard.service';
 
 @Component({
-  selector: 'app-dashboard', imports: [ReactiveFormsModule, RouterLink, DashboardCardComponent],
+  selector: 'app-dashboard', imports: [ReactiveFormsModule, RouterLink, DashboardCardComponent, NotificationBellComponent],
   templateUrl: './dashboard.component.html', styleUrl: './dashboard.component.css'
 })
 export class DashboardComponent implements OnInit {

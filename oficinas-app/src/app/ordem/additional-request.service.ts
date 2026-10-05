@@ -10,10 +10,15 @@ export interface AdditionalItem {
   id: string; tipo: AdditionalItemType; descricao: string; quantidade: number;
   valorUnitario: number; total: number; grupoDependencia: string | null; ordem: number;
 }
+export interface AdditionalDecisionBlock {
+  id: string; grupoDependencia: string | null; total: number; itens: AdditionalItem[];
+  decisao: 'APROVADO' | 'RECUSADO' | null; decididaEm: string | null;
+}
 export interface AdditionalVersion {
   id: string; numero: number; estado: AdditionalVersionStatus; problema: string;
   justificativa: string; previsaoProposta: string | null; impactoPrazo: string;
   motivoSubstituicao: string | null; total: number; fotoIds: string[]; itens: AdditionalItem[];
+  blocos: AdditionalDecisionBlock[];
   enviadaEm: string | null; substituidaEm: string | null; createdAt: string; updatedAt: string;
 }
 export interface AdditionalRequest {

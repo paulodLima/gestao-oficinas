@@ -42,11 +42,14 @@ class ShopIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
         }
         HttpResponse<String> upload(byte[] image, long version) throws Exception {
+            return uploadTo(image, version, "logo");
+        }
+        HttpResponse<String> uploadTo(byte[] image, long version, String target) throws Exception {
             var output = new ByteArrayOutputStream();
             output.write("--testBoundary\r\nContent-Disposition: form-data; name=\"arquivo\"; filename=\"logo.png\"\r\nContent-Type: image/png\r\n\r\n".getBytes(StandardCharsets.UTF_8));
             output.write(image);
             output.write("\r\n--testBoundary--\r\n".getBytes(StandardCharsets.UTF_8));
-            return client.send(HttpRequest.newBuilder(uri("/api/oficina/logo?versao=" + version))
+            return client.send(HttpRequest.newBuilder(uri("/api/oficina/" + target + "?versao=" + version))
                 .header("Content-Type", "multipart/form-data; boundary=testBoundary").header("X-CSRF-TOKEN", csrf())
                 .PUT(HttpRequest.BodyPublishers.ofByteArray(output.toByteArray())).build(), HttpResponse.BodyHandlers.ofString());
         }
@@ -60,6 +63,28 @@ class ShopIntegrationTest {
         assertEquals(201, browser.send("POST", "/api/auth/cadastro", Map.of("nome", "Teste", "nomeOficina", "Oficina teste", "email", email, "senha", "Oficina-segura-123")).statusCode());
         assertEquals(200, browser.send("POST", "/api/auth/login", credentials).statusCode());
         return browser;
+    }
+    @Test void coverIsScopedVersionedAndOnlyPublicWhenProfileIsPublished() throws Exception {
+        var first = owner();
+        var second = owner();
+        var visitor = new Browser();
+        String path = "/api/publico/oficinas/" + first.profile().get("slug").asText();
+        assertEquals(404, visitor.get(path + "/identidade").statusCode());
+        assertEquals(401, visitor.uploadTo(LogoValidatorTest.png(10, 10), 0, "capa").statusCode());
+        assertEquals(200, first.uploadTo(LogoValidatorTest.png(1200, 600), 0, "capa").statusCode());
+        assertEquals(409, first.uploadTo(LogoValidatorTest.png(10, 10), 0, "capa").statusCode());
+        assertEquals(415, first.uploadTo("invalid".getBytes(), 1, "capa").statusCode());
+        assertEquals(404, visitor.get(path + "/capa").statusCode());
+        assertEquals(0, second.profile().get("versao").asLong());
+        assertEquals(200, first.send("PATCH", "/api/oficina", Map.of("versao", 1, "perfilPublico", true)).statusCode());
+        var branding = mapper.readTree(visitor.get(path + "/identidade").body());
+        assertEquals(6, branding.size());
+        assertTrue(branding.get("temCapa").asBoolean());
+        assertEquals("#52695F", branding.get("corMenu").asText());
+        assertEquals(200, visitor.get(path + "/capa").statusCode());
+        assertEquals(200, first.send("DELETE", "/api/oficina/capa?versao=2", Map.of()).statusCode());
+        assertEquals(404, visitor.get(path + "/capa").statusCode());
+        assertFalse(mapper.readTree(visitor.get(path + "/identidade").body()).get("temCapa").asBoolean());
     }
     @Test void savesPartialFieldsAndAuditsWithVersionConflict() throws Exception {
         var browser = owner();
@@ -95,11 +120,12 @@ class ShopIntegrationTest {
         var response = publicBrowser.get(path);
         assertEquals(200, response.statusCode());
         var data = mapper.readTree(response.body());
-        assertEquals(7, data.size());
+        assertEquals(10, data.size());
         assertFalse(data.has("id"));
         assertFalse(data.has("versao"));
         assertFalse(data.has("perfilPublico"));
         assertEquals("Rua de teste, 123", data.get("endereco").asText());
+        assertEquals("#4D7063", data.get("corDestaque").asText());
         assertTrue(response.headers().firstValue("Cache-Control").orElse("").contains("no-store"));
         assertEquals(200, browser.send("PATCH", "/api/oficina", Map.of("versao", 1, "perfilPublico", false)).statusCode());
         assertEquals(404, publicBrowser.get(path).statusCode());

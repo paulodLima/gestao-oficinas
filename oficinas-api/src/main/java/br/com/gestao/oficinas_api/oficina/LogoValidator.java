@@ -18,6 +18,12 @@ public class LogoValidator {
     private static final long MAX_PIXELS = 4_000_000;
     private static final int MAX_EDGE = 512;
     public byte[] normalize(MultipartFile file) {
+        return normalize(file, MAX_EDGE);
+    }
+    public byte[] normalizeCover(MultipartFile file) {
+        return normalize(file, 1600);
+    }
+    private byte[] normalize(MultipartFile file, int maxEdge) {
         if (file.isEmpty()) throw invalid();
         if (file.getSize() > MAX_BYTES) throw new ApiException(413, "LOGO_GRANDE", "A logo deve ter até 2 MiB.");
         if (!Set.of("image/png", "image/jpeg").contains(String.valueOf(file.getContentType()))) throw invalid();
@@ -32,12 +38,12 @@ public class LogoValidator {
                 if (!file.getContentType().equals("image/" + format)) throw invalid();
                 long pixels = (long) reader.getWidth(0) * reader.getHeight(0);
                 if (pixels <= 0 || pixels > MAX_PIXELS) throw invalid();
-                return resize(reader.read(0));
+                return resize(reader.read(0), maxEdge);
             } finally { reader.dispose(); }
         } catch (IOException | IllegalArgumentException exception) { throw invalid(); }
     }
-    private byte[] resize(BufferedImage source) throws IOException {
-        double scale = Math.min(1.0, (double) MAX_EDGE / Math.max(source.getWidth(), source.getHeight()));
+    private byte[] resize(BufferedImage source, int maxEdge) throws IOException {
+        double scale = Math.min(1.0, (double) maxEdge / Math.max(source.getWidth(), source.getHeight()));
         var image = new BufferedImage(Math.max(1, (int) (source.getWidth() * scale)),
             Math.max(1, (int) (source.getHeight() * scale)), BufferedImage.TYPE_INT_ARGB);
         var graphics = image.createGraphics();

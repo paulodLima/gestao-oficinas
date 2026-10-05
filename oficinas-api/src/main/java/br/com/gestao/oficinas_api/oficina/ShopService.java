@@ -10,7 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ShopService {
-    private static final Set<String> FIELDS = Set.of("nome", "telefone", "emailContato", "endereco", "horario", "fuso", "perfilPublico", "versao");
+    private static final Set<String> FIELDS = Set.of("nome", "telefone", "emailContato", "endereco", "horario", "fuso", "perfilPublico", "corMenu", "corMenuAtivo", "corDestaque", "versao");
     private final ShopRepository repository;
     private final IdentidadeRepository identities;
     private final LogoValidator logos;
@@ -29,6 +29,9 @@ public class ShopService {
         String timezone = text(fields, "fuso", current.fuso(), 80);
         String email = text(fields, "emailContato", current.emailContato(), 254);
         String phone = text(fields, "telefone", current.telefone(), 30);
+        String menuColor = color(fields, "corMenu", current.corMenu());
+        String activeMenuColor = color(fields, "corMenuAtivo", current.corMenuAtivo());
+        String accentColor = color(fields, "corDestaque", current.corDestaque());
         if (name.isBlank()) throw invalid("Informe o nome da oficina.");
         if (!ZoneId.getAvailableZoneIds().contains(timezone)) throw invalid("Informe um fuso IANA válido.");
         if (!email.isEmpty() && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) throw invalid("Informe um e-mail válido.");
@@ -37,7 +40,7 @@ public class ShopService {
         if (!(visible instanceof Boolean)) throw invalid("Publicação inválida.");
         repository.save(new ShopProfile(current.id(), current.slug(), name, phone, email,
             text(fields, "endereco", current.endereco(), 500), text(fields, "horario", current.horario(), 1000),
-            timezone, (Boolean) visible, current.temLogo(), version));
+            timezone, (Boolean) visible, current.temLogo(), menuColor, activeMenuColor, accentColor, version));
         identities.auditar(identity.id(), identity.oficinaId(), "OFICINA_EDITADA");
         return find(identity);
     }
@@ -53,6 +56,12 @@ public class ShopService {
         identities.auditar(identity.id(), identity.oficinaId(), "LOGO_REMOVIDA");
         return find(identity);
     }
+    @Transactional
+    public ShopProfile updateCover(Identidade identity, long version, MultipartFile file) {
+        repository.saveCover(identity.oficinaId(), version, file == null ? null : logos.normalizeCover(file));
+        identities.auditar(identity.id(), identity.oficinaId(), file == null ? "CAPA_REMOVIDA" : "CAPA_ALTERADA");
+        return find(identity);
+    }
     private String text(Map<String, Object> fields, String key, String fallback, int limit) {
         if (!fields.containsKey(key)) return fallback;
         if (!(fields.get(key) instanceof String value) || value.length() > limit) throw invalid("Confira o campo " + key + ".");
@@ -62,6 +71,11 @@ public class ShopService {
         if (!(value instanceof Number number) || number.longValue() < 0 || number.doubleValue() != number.longValue())
             throw invalid("Informe a versão dos dados.");
         return number.longValue();
+    }
+    private String color(Map<String, Object> fields, String key, String fallback) {
+        String value = text(fields, key, fallback, 7).toUpperCase(java.util.Locale.ROOT);
+        if (!value.matches("^#[0-9A-F]{6}$")) throw invalid("Escolha uma cor hexadecimal válida.");
+        return value;
     }
     private ApiException invalid(String detail) { return new ApiException(400, "DADOS_INVALIDOS", detail); }
 }

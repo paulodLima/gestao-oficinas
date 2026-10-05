@@ -7,7 +7,9 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -173,7 +175,7 @@ public class AdditionalRequestRepository {
             AdditionalRequest.VersionStatus.valueOf(result.getString("estado")),
             result.getString("problema"), result.getString("justificativa"),
             instant(result.getTimestamp("previsao_proposta")), result.getString("impacto_prazo"),
-            result.getString("motivo_substituicao"), total, photos(id), items,
+            result.getString("motivo_substituicao"), total, photos(id), items, blocks(id, items),
             instant(result.getTimestamp("enviada_em")), instant(result.getTimestamp("substituida_em")),
             result.getTimestamp("created_at").toInstant(), result.getTimestamp("updated_at").toInstant());
     }
@@ -193,6 +195,32 @@ public class AdditionalRequestRepository {
         return jdbc.query("""
             SELECT foto_id FROM adicional_versao_foto WHERE versao_id=? ORDER BY ordem ASC
             """, (result, row) -> result.getObject(1, UUID.class), versionId);
+    }
+
+    private List<AdditionalRequest.Block> blocks(UUID versionId, List<AdditionalRequest.Item> items) {
+        Map<UUID, DecisionRow> decisions = jdbc.query("""
+            SELECT item_id,decisao,created_at FROM adicional_item_decisao WHERE versao_id=?
+            """, result -> {
+                Map<UUID, DecisionRow> values = new LinkedHashMap<>();
+                while (result.next()) values.put(result.getObject(1, UUID.class),
+                    new DecisionRow(result.getString(2), result.getTimestamp(3).toInstant()));
+                return values;
+            }, versionId);
+        Map<String, List<AdditionalRequest.Item>> grouped = new LinkedHashMap<>();
+        for (AdditionalRequest.Item item : items) {
+            String key = item.grupoDependencia() == null || item.grupoDependencia().isBlank()
+                ? "item:" + item.id() : "grupo:" + item.grupoDependencia();
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(item);
+        }
+        return grouped.entrySet().stream().map(entry -> {
+            List<AdditionalRequest.Item> blockItems = entry.getValue();
+            DecisionRow decision = decisions.get(blockItems.getFirst().id());
+            BigDecimal total = blockItems.stream().map(AdditionalRequest.Item::total)
+                .reduce(BigDecimal.ZERO.setScale(2), BigDecimal::add);
+            return new AdditionalRequest.Block(entry.getKey(), blockItems.getFirst().grupoDependencia(), total,
+                List.copyOf(blockItems), decision == null ? null : decision.decisao(),
+                decision == null ? null : decision.decididaEm());
+        }).toList();
     }
 
     private void lockRequest(UUID shop, UUID order, UUID id, long expectedVersion, String state) {
@@ -221,6 +249,8 @@ public class AdditionalRequestRepository {
     private ApiException conflict(String detail) {
         return new ApiException(409, "CONFLITO_DE_VERSAO", detail);
     }
+
+    private record DecisionRow(String decisao, Instant decididaEm) {}
 
     public record DraftData(String problem, String justification, Instant proposedForecast,
                             String deadlineImpact, List<UUID> photoIds, List<ItemData> items) {}

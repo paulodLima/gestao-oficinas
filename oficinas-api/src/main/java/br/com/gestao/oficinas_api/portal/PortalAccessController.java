@@ -69,6 +69,14 @@ public class PortalAccessController {
         return accepted(publicId);
     }
 
+    @GetMapping("/oficinas")
+    public List<PublicOffice> offices() {
+        return jdbc.query("""
+            SELECT slug,nome FROM oficina
+             ORDER BY nome ASC,slug ASC
+            """, (result, row) -> new PublicOffice(result.getString(1), result.getString(2)));
+    }
+
     @PostMapping("/acesso/validacao")
     @Transactional(noRollbackFor = ApiException.class)
     public ResponseEntity<Void> validateCode(@RequestBody Validate body, HttpServletRequest request) {
@@ -393,6 +401,7 @@ public class PortalAccessController {
     }
 
     public record Request(String oficinaSlug, String placa) {}
+    public record PublicOffice(String slug, String nome) {}
     public record Validate(UUID desafioId, String codigo) {}
     public record Link(String token) {}
     public record Vehicle(UUID id, String placa, String veiculo) {}

@@ -56,12 +56,13 @@ public class ServiceOrderAccessController {
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Instant expires = now.plus(LINK_DURATION);
+        String officeName = jdbc.queryForObject("SELECT nome FROM oficina WHERE id=?", String.class, owner.oficinaId());
         jdbc.update("""
             INSERT INTO portal_link_os(id,oficina_id,ordem_servico_id,token_hash,expira_em,criado_por)
             VALUES (?,?,?,?,?,?)
-            """, UUID.randomUUID(), owner.oficinaId(), orderId, sha(token), Timestamp.from(expires), owner.id());
+        """, UUID.randomUUID(), owner.oficinaId(), orderId, sha(token), Timestamp.from(expires), owner.id());
         audit(owner, orderId, "LINK_OPERACIONAL_EMITIDO");
-        return new Link(token, expires);
+        return new Link(token, expires, officeName);
     }
 
     @DeleteMapping
@@ -108,5 +109,5 @@ public class ServiceOrderAccessController {
         }
     }
 
-    public record Link(String token, Instant expiraEm) {}
+    public record Link(String token, Instant expiraEm, String oficinaNome) {}
 }

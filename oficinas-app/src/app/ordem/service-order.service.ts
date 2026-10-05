@@ -46,7 +46,7 @@ export interface InspectionChecklist {
   avarias: string; observacoes: string; fotos: Record<string, string>;
 }
 export interface Inspection { id: string; numeroVersao: number; estado: 'RASCUNHO' | 'CONFIRMADA'; checklist: InspectionChecklist; motivoCorrecao: string | null; createdAt: string; updatedAt: string; }
-export interface CustomerAccessLink { token: string; expiraEm: string; }
+export interface CustomerAccessLink { token: string; expiraEm: string; oficinaNome?: string; }
 export interface ClosureInput {
   tipo: 'ENTREGUE' | 'CANCELADO'; motivo: string; confirmado: boolean;
   cancelarPendencias: boolean; expectedVersion: number;

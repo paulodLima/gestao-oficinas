@@ -12,9 +12,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class ShopController {
     private final ShopService service;
     private final ShopRepository repository;
-    public ShopController(ShopService service, ShopRepository repository) {
+    private final AddressLookupService addresses;
+    public ShopController(ShopService service, ShopRepository repository, AddressLookupService addresses) {
         this.service = service;
         this.repository = repository;
+        this.addresses = addresses;
     }
     @GetMapping("/oficina")
     public ShopProfile get(Authentication authentication) { return service.find(identity(authentication)); }
@@ -22,6 +24,12 @@ public class ShopController {
     public ShopProfile update(Authentication authentication, @RequestBody Map<String, Object> fields) {
         var owner = identity(authentication);
         return service.update(owner, fields);
+    }
+    @GetMapping("/oficina/endereco/sugestoes")
+    public java.util.List<AddressLookupService.Suggestion> addressSuggestions(Authentication authentication,
+                                                                                @RequestParam String q) {
+        identity(authentication);
+        return addresses.search(q);
     }
     @PutMapping(value = "/oficina/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ShopProfile upload(Authentication authentication, @RequestParam long versao, @RequestPart MultipartFile arquivo) {
@@ -44,6 +52,24 @@ public class ShopController {
     @GetMapping("/publico/oficinas/{slug}/logo")
     public ResponseEntity<byte[]> publicLogo(@PathVariable String slug) {
         return image(repository.findPublicLogo(slug));
+    }
+    @PutMapping(value = "/oficina/capa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ShopProfile cover(Authentication authentication, @RequestParam long versao, @RequestPart MultipartFile arquivo) {
+        return service.updateCover(identity(authentication), versao, arquivo);
+    }
+    @DeleteMapping("/oficina/capa")
+    public ShopProfile removeCover(Authentication authentication, @RequestParam long versao) {
+        return service.updateCover(identity(authentication), versao, null);
+    }
+    @GetMapping("/publico/oficinas/{slug}/identidade")
+    public Map<String, Object> branding(@PathVariable String slug) {
+        var profile = repository.findPublic(slug);
+        return Map.of("nome", profile.nome(), "temLogo", profile.temLogo(), "temCapa", repository.hasPublicCover(slug),
+            "corMenu", profile.corMenu(), "corMenuAtivo", profile.corMenuAtivo(), "corDestaque", profile.corDestaque());
+    }
+    @GetMapping("/publico/oficinas/{slug}/capa")
+    public ResponseEntity<byte[]> publicCover(@PathVariable String slug) {
+        return image(repository.findPublicCover(slug));
     }
     private ResponseEntity<byte[]> image(byte[] bytes) {
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).cacheControl(CacheControl.noStore())

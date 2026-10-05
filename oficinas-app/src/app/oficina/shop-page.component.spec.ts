@@ -5,11 +5,13 @@ import { ShopService, ShopProfile } from './shop.service';
 
 describe('Configuração da oficina', () => {
   const profile: ShopProfile = { id: 'id', slug: 'oficina-teste', nome: 'Oficina Teste', telefone: '',
-    emailContato: '', endereco: '', horario: '', fuso: 'America/Sao_Paulo', perfilPublico: false, temLogo: false, versao: 0 };
+    emailContato: '', endereco: '', horario: '', fuso: 'America/Sao_Paulo', perfilPublico: false, temLogo: false,
+    corMenu: '#52695F', corMenuAtivo: '#E3ECD9', corDestaque: '#4D7063', versao: 0 };
   let service: jasmine.SpyObj<ShopService>;
   beforeEach(() => {
-    service = jasmine.createSpyObj<ShopService>('ShopService', ['get', 'save', 'upload', 'remove']);
+    service = jasmine.createSpyObj<ShopService>('ShopService', ['get', 'save', 'upload', 'remove', 'addressSuggestions']);
     service.get.and.resolveTo(profile);
+    service.addressSuggestions.and.resolveTo([]);
     TestBed.configureTestingModule({ imports: [ShopPageComponent], providers: [provideRouter([]), { provide: ShopService, useValue: service }] });
   });
   it('carrega dados e bloqueia nome em branco e e-mail inválido', async () => {
@@ -58,5 +60,11 @@ describe('Configuração da oficina', () => {
     await component.load();
     expect(component.success()).toBe('');
     expect(component.error()).toBeTruthy();
+  });
+  it('preenche o endereço ao escolher uma sugestão', () => {
+    const component = TestBed.createComponent(ShopPageComponent).componentInstance;
+    component.chooseAddress({ endereco: 'Rua das Oficinas, 100, Centro, São Paulo, SP, Brasil' });
+    expect(component.form.controls.endereco.value).toContain('Rua das Oficinas');
+    expect(component.addressSuggestions()).toEqual([]);
   });
 });

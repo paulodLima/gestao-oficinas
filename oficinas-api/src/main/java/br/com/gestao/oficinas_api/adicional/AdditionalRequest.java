@@ -15,10 +15,14 @@ public record AdditionalRequest(UUID id, UUID ordemServicoId, Status estado, lon
     public record Version(UUID id, int numero, VersionStatus estado, String problema,
                           String justificativa, Instant previsaoProposta, String impactoPrazo,
                           String motivoSubstituicao, BigDecimal total, List<UUID> fotoIds,
-                          List<Item> itens, Instant enviadaEm, Instant substituidaEm,
+                          List<Item> itens, List<Block> blocos, Instant enviadaEm, Instant substituidaEm,
                           Instant createdAt, Instant updatedAt) {}
 
     public record Item(UUID id, ItemType tipo, String descricao, BigDecimal quantidade,
                        BigDecimal valorUnitario, BigDecimal total, String grupoDependencia,
                        int ordem) {}
+
+    /** Resultado por item independente ou grupo dependente, informado pelo cliente. */
+    public record Block(String id, String grupoDependencia, BigDecimal total, List<Item> itens,
+                        String decisao, Instant decididaEm) {}
 }

@@ -3,17 +3,24 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from './auth.service';
+import { ShopService } from '../oficina/shop.service';
 
 @Component({
   selector: 'app-auth-page',
   imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './auth-page.component.html',
-  styleUrl: './auth-page.component.css'
+  styleUrls: ['./auth-page.component.css', './login-refresh.css']
 })
 export class AuthPageComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly shops = inject(ShopService);
+  readonly slug = inject(ActivatedRoute).snapshot.queryParamMap.get('oficina') ?? '';
+  readonly branding = signal<{ nome: string; temLogo: boolean; temCapa: boolean } | null>(null);
+  readonly imageFailed = signal(false);
+  readonly logoFailed = signal(false);
+  get imageBase() { return '/api/publico/oficinas/' + encodeURIComponent(this.slug); }
   readonly mode = inject(ActivatedRoute).snapshot.data['mode'] as 'login' | 'register' | 'recover' | 'reset';
   readonly busy = signal(false);
   readonly error = signal('');
@@ -35,6 +42,7 @@ export class AuthPageComponent implements OnInit {
     }[this.mode];
   }
   ngOnInit() {
+    if (this.slug) void this.shops.branding(this.slug).then(value => this.branding.set(value)).catch(() => this.branding.set(null));
     if (this.mode !== 'reset') this.form.controls.email.setValidators([Validators.required, Validators.email, Validators.maxLength(254)]);
     if (this.mode === 'register') {
       this.form.controls.nome.setValidators([Validators.required, Validators.maxLength(120)]);

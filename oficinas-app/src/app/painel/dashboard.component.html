@@ -1,8 +1,14 @@
 <main>
-  <section class="hero"><div><p class="eyebrow">OPERAÇÃO / VISÃO GERAL</p><h1>O ritmo da oficina.</h1>
-    <p>Saiba o que está em andamento e onde sua atenção faz diferença.</p></div>
-    <a class="primary action" routerLink="/abrir-ordem">Abrir ou consultar uma OS <span aria-hidden="true">↗</span></a></section>
+  <section class="hero"><div><h2>Painel da oficina</h2>
+    <p>Acompanhe os serviços, antecipe pendências e organize as próximas entregas.</p></div>
+    <div class="hero-actions"><app-notification-bell /><a class="primary action" routerLink="/abrir-ordem">+ Nova ordem de serviço</a></div></section>
   @if(snapshot(); as data) {
+    <nav class="quick-access" aria-label="Acesso rápido">
+      <span>Acesso rápido</span>
+      <a routerLink="/clientes">Clientes <span aria-hidden="true">↗</span></a>
+      <a routerLink="/veiculos">Veículos <span aria-hidden="true">↗</span></a>
+      <a routerLink="/perfil">Perfil da oficina <span aria-hidden="true">↗</span></a>
+    </nav>
     <section class="metrics" aria-label="Indicadores de toda a oficina">
       @for(metric of metrics; track metric.key) {
         <button type="button" [class.selected]="filters.controls.situacao.value === metric.situation"
@@ -10,7 +16,29 @@
           <strong>{{ data.indicadores[metric.key] }}</strong><span>{{ metric.label }}</span></button>
       }
     </section>
-    <p class="scope">Indicadores de toda a oficina, antes dos filtros. Prontas continuam ativas, mas não são atraso de execução.</p>
+    <div class="analytics">
+      <section class="chart-panel" aria-labelledby="operation-chart-title">
+        <header><div><h2 id="operation-chart-title">Situação dos serviços</h2><p>Visão atual de toda a oficina</p></div><span class="live-label">Agora</span></header>
+        <div class="horizontal-chart">
+          @for(metric of metrics; track metric.key) {
+            <button class="chart-row" type="button" (click)="choose(metric.situation)" [disabled]="loading()">
+              <span>{{ metric.label }}</span>
+              <span class="bar-track"><span class="bar-fill" [class.warning]="metric.key === 'atrasadas'" [class.ready]="metric.key === 'prontas'" [style.width.%]="data.indicadores.ativas ? data.indicadores[metric.key] / data.indicadores.ativas * 100 : 0"></span></span>
+              <b>{{ data.indicadores[metric.key] }}</b>
+            </button>
+          }
+        </div>
+        <p class="chart-note">As situações podem se sobrepor: uma ordem aguardando peças também pode estar atrasada.</p>
+      </section>
+      <section class="delivery-panel" aria-labelledby="delivery-title">
+        <h2 id="delivery-title">Próximas entregas</h2><p>Serviços prontos para voltar à estrada</p>
+        <div class="delivery-ring" [style.--ready]="(data.indicadores.ativas ? data.indicadores.prontas / data.indicadores.ativas * 100 : 0) + '%'">
+          <div><strong>{{ data.indicadores.prontas }}</strong><span>prontas para retirada</span></div>
+        </div>
+        <p class="delivery-caption">De {{ data.indicadores.ativas }} ordens ativas</p>
+        <button type="button" (click)="choose('PRONTAS')" [disabled]="loading()">Ver veículos prontos <span aria-hidden="true">→</span></button>
+      </section>
+    </div>
   }
   <form class="filters" [formGroup]="filters" (ngSubmit)="apply()" aria-label="Filtros do painel">
     <div class="search"><label for="dashboard-search">Buscar por placa, cliente ou OS</label><input id="dashboard-search" formControlName="q" maxlength="100" placeholder="BRA-1E23, Ana ou OS-12"></div>

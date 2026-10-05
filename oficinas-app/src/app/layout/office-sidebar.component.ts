@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../auth/auth.service';
 import { ShopProfile, ShopService } from '../oficina/shop.service';
+import { ShopThemeService } from '../oficina/shop-theme.service';
 
 @Component({
   selector: 'app-office-sidebar',
@@ -19,14 +20,8 @@ import { ShopProfile, ShopService } from '../oficina/shop.service';
       </a>
 
       <nav>
-        <a routerLink="/avaliacoes" routerLinkActive="active" aria-label="Avaliações dos clientes">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.2L5.8 21 7 14.2 2 9.3l6.9-1Z"/></svg><span>Avaliações</span>
-        </a>
-        <a routerLink="/notificacoes" routerLinkActive="active" aria-label="Central de avisos">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v5l-2 3v2h16v-2l-2-3V8a6 6 0 0 0-6-6Zm0 20a3 3 0 0 0 3-3H9a3 3 0 0 0 3 3Z"/></svg><span>Avisos</span>
-        </a>
         <a routerLink="/painel" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" aria-label="Painel">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg><span>Painel</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1V10Z"/></svg><span>Painel</span>
         </a>
         <a routerLink="/perfil" routerLinkActive="active" aria-label="Perfil">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.02-8 4.5V20h16v-1.5c0-2.48-3.58-4.5-8-4.5Z"/></svg><span>Perfil</span>
@@ -79,9 +74,12 @@ export class OfficeSidebarComponent implements OnInit {
   readonly busy = signal(false);
   readonly error = signal('');
   private readonly shopService = inject(ShopService);
+  private readonly theme = inject(ShopThemeService);
   readonly office = signal<ShopProfile | null>(null);
 
-  ngOnInit() { void this.load(); }
+  ngOnInit() {
+    void this.load();
+  }
 
   async logout() {
     if (this.busy()) return;
@@ -99,6 +97,6 @@ export class OfficeSidebarComponent implements OnInit {
   }
 
   private async load() {
-    try { this.office.set(await this.shopService.get()); } catch { this.office.set(null); }
+    try { const office = await this.shopService.get(); this.office.set(office); this.theme.apply(office); } catch { this.office.set(null); }
   }
 }

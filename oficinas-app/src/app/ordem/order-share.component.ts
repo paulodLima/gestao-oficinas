@@ -16,10 +16,11 @@ export class OrderShareComponent implements OnDestroy {
   private expiryTimer?: ReturnType<typeof setTimeout>;
   readonly busy = signal(false);
   readonly url = signal('');
+  readonly officeName = signal('');
   readonly expires = signal('');
   readonly notice = signal('');
   readonly error = signal('');
-  readonly message = computed(() => this.url() ? buildTrackingMessage(this.url()) : '');
+  readonly message = computed(() => this.url() ? buildTrackingMessage(this.url(), this.officeName()) : '');
   readonly destination = computed(() => buildWhatsAppUrl(this.message()));
 
   @Input({ required: true }) set order(value: ServiceOrder) {
@@ -46,7 +47,8 @@ export class OrderShareComponent implements OnDestroy {
       if (revision !== this.revision) return;
       const remaining = Date.parse(link.expiraEm) - Date.now();
       if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('Expired link');
-      this.url.set(buildTrackingUrl(this.document.location.origin, link.token));
+      this.officeName.set(link.oficinaNome ?? '');
+      this.url.set(buildTrackingUrl(this.document.location.origin, link.token, link.oficinaNome));
       this.expires.set(link.expiraEm);
       this.expiryTimer = setTimeout(() => this.expireLink(), remaining);
       this.notice.set('Link preparado. Links anteriores desta OS foram revogados. Nenhuma mensagem foi enviada.');
@@ -118,6 +120,7 @@ export class OrderShareComponent implements OnDestroy {
   private clearLink() {
     clearTimeout(this.expiryTimer);
     this.url.set('');
+    this.officeName.set('');
     this.expires.set('');
   }
 

@@ -61,8 +61,11 @@ async function mock(context: BrowserContext) {
 test('pronto, entrega confirmada, histórico bloqueado e retorno com nova OS', async ({ page, context }, info) => {
   const api = await mock(context);
   await page.goto('/abrir-ordem');
-  await page.getByLabel('Nova etapa').selectOption('PRONTO_PARA_RETIRADA');
+  await page.getByRole('button', { name: /OS-000017/ }).click();
+  await page.getByRole('button', { name: 'Fluxo' }).click();
+  await page.getByLabel('Próxima etapa *').selectOption('PRONTO_PARA_RETIRADA');
   await page.getByRole('button', { name: 'Atualizar etapa', exact: true }).click();
+  await page.getByRole('button', { name: 'Detalhe' }).click();
   await expect(page.getByText('Pronto · aguardando retirada', { exact: true })).toBeVisible();
   const portal = await context.newPage(); await portal.goto('/acompanhar');
   await expect(portal.getByRole('heading', { name: initial.veiculo })).toBeVisible();
@@ -77,10 +80,14 @@ test('pronto, entrega confirmada, histórico bloqueado e retorno com nova OS', a
   await page.locator('app-order-closure').screenshot({ path: `test-results/encerramento-confirmacao-${info.project.name}.png` });
   await page.getByRole('button', { name: 'Confirmar encerramento' }).click();
   await expect(page.getByRole('heading', { name: 'Atendimento encerrado' })).toBeVisible();
+  await page.getByRole('button', { name: 'Fluxo' }).click();
   await expect(page.getByRole('button', { name: 'Atualizar etapa', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Comunicar' }).click();
   await expect(page.getByRole('button', { name: 'Registrar atualização', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Adicionais' }).click();
   await expect(page.getByRole('button', { name: '+ Nova solicitação adicional', exact: true })).toBeDisabled();
   await portal.reload(); await expect(portal.getByText('Nenhum serviço em andamento', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Detalhe' }).click();
   await page.getByRole('button', { name: 'Abrir nova OS para este veículo' }).click();
   await expect(page.getByLabel('Cliente responsável')).toHaveValue('c1');
   await expect(page.getByLabel('Veículo *', { exact: true })).toHaveValue('v1');
@@ -99,6 +106,7 @@ test('pronto, entrega confirmada, histórico bloqueado e retorno com nova OS', a
 
 test('cancelamento exige motivo e voltar não encerra', async ({ page, context }) => {
   const api = await mock(context); await page.goto('/abrir-ordem');
+  await page.getByRole('button', { name: /OS-000017/ }).click();
   await page.getByRole('button', { name: 'Revisar encerramento' }).click();
   await page.getByLabel('Tipo de encerramento').selectOption('CANCELADO');
   await page.getByLabel('Confirmo o encerramento definitivo desta OS.').check();

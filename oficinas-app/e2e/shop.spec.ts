@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('configuração, logo, perfil público e revogação', async ({ page, browser }, info) => {
+test('configuração, horários, logo e perfil público automático', async ({ page, browser }, info) => {
   const email = `shop-${Date.now()}-${info.project.name}@example.test`;
   await page.goto('/cadastro');
   await page.getByLabel('Seu nome', { exact: true }).fill('Dono Teste');
@@ -21,8 +21,8 @@ test('configuração, logo, perfil público e revogação', async ({ page, brows
   await page.getByLabel('Telefone de contato').fill('(61) 3333-4444');
   await page.getByLabel('E-mail de contato').fill('contato@example.test');
   await page.getByLabel('Endereço', { exact: true }).fill('Rua das Oficinas, 123');
-  await page.getByLabel('Horário de atendimento').fill('Segunda a sexta: 8h às 18h');
-  await page.getByLabel('Publicar perfil da oficina').check();
+  await page.getByLabel('Abertura').first().fill('08:00');
+  await page.getByLabel('Fechamento').first().fill('18:00');
   await page.getByRole('button', { name: 'Salvar informações' }).click();
   await expect(page.getByRole('status')).toContainText('salva');
   await page.reload();
@@ -58,10 +58,7 @@ test('configuração, logo, perfil público e revogação', async ({ page, brows
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.getByRole('button', { name: 'Remover logo' }).click();
   await expect(page.getByLabel('Oficina sem logo')).toBeVisible();
-  await page.getByLabel('Publicar perfil da oficina').uncheck();
-  await page.getByRole('button', { name: 'Salvar informações' }).click();
-  await expect(page.getByRole('status')).toContainText('salva');
   await publicPage.reload();
-  await expect(publicPage.getByRole('heading', { name: 'Perfil indisponível' })).toBeVisible();
+  await expect(publicPage.getByRole('heading', { name: 'Oficina Horizonte' })).toBeVisible();
   await publicContext.close();
 });

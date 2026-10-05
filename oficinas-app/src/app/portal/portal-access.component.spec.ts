@@ -26,6 +26,12 @@ describe('PortalAccessComponent', () => {
 
   afterEach(() => http.verify());
 
+  function flushOfficeChoices() {
+    http.expectOne('/api/portal/oficinas').flush([
+      { slug: 'oficina-central', nome: 'Oficina Central' }
+    ]);
+  }
+
   it('troca token explicitamente vazio sem restaurar autorização antiga', async () => {
     TestBed.inject(ActivatedRoute).snapshot.fragment = 'token=';
     Object.defineProperty(TestBed.inject(ActivatedRoute).snapshot, 'queryParamMap', {
@@ -33,6 +39,7 @@ describe('PortalAccessComponent', () => {
     });
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
     const operation = component.ngOnInit();
+    flushOfficeChoices();
     await tickRequests();
     http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
     await tickRequests();
@@ -53,6 +60,7 @@ describe('PortalAccessComponent', () => {
       const clean = spyOn(TestBed.inject(Location), 'replaceState');
       const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
       const operation = component.ngOnInit();
+      flushOfficeChoices();
       expect(clean).toHaveBeenCalledWith('/acompanhar');
       await tickRequests();
       http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
@@ -69,6 +77,7 @@ describe('PortalAccessComponent', () => {
   it('restaura sessão HTTP sem guardar ou reenviar token', async () => {
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
     const operation = component.ngOnInit();
+    flushOfficeChoices();
     http.expectOne('/api/portal/veiculos').flush([]);
     await tickRequests();
     http.expectOne('/api/portal/servico-atual').flush({ oficina: { nome: 'Oficina' }, servico: null });
@@ -80,6 +89,7 @@ describe('PortalAccessComponent', () => {
   it('mantém formulário de acesso para visitante sem sessão', async () => {
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
     const operation = component.ngOnInit();
+    flushOfficeChoices();
     http.expectOne('/api/portal/veiculos').flush({}, { status: 401, statusText: 'Unauthorized' });
     await operation;
     expect(component.authenticated()).toBeFalse();
@@ -92,6 +102,7 @@ describe('PortalAccessComponent', () => {
     spyOn(location, 'path').and.returnValue('/acompanhar#token=next-link');
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
     const opening = component.ngOnInit();
+    flushOfficeChoices();
     http.expectOne('/api/portal/veiculos').flush([]);
     await tickRequests();
     const previous = http.expectOne('/api/portal/servico-atual');
@@ -118,6 +129,7 @@ describe('PortalAccessComponent', () => {
     TestBed.inject(ActivatedRoute).snapshot.fragment = 'token=first-link';
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
     const opening = component.ngOnInit();
+    flushOfficeChoices();
     await tickRequests();
     http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
     await tickRequests();
@@ -141,7 +153,8 @@ describe('PortalAccessComponent', () => {
 
   it('solicita código com resposta genérica sem expor cadastro', async () => {
     const component = TestBed.createComponent(PortalAccessComponent).componentInstance;
-    component.slug = ' oficina-central ';
+    component.offices.set([{ slug: 'oficina-central', nome: 'Oficina Central' }]);
+    component.officeName = ' OFICINA CENTRAL ';
     component.plate = ' BRA-1E23 ';
     const operation = component.request();
     http.expectOne('/api/auth/csrf').flush({ token: 'csrf', headerName: 'X-CSRF-TOKEN' });
